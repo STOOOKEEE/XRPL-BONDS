@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Use env var or fallback to devnet
-const WS_URL = process.env.XRPL_WEBSOCKET_URL ?? 'wss://s.devnet.rippletest.net:51233';
+const WS_URL = process.env.XRPL_WEBSOCKET_URL ?? 'wss://s.testnet.rippletest.net:51233';
 const client = new Client(WS_URL);
 
 const main = async () => {

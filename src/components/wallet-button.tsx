@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,83 +11,221 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useWalletStore } from "@/lib/store"
-import { connectGemWallet, formatAddress } from "@/lib/wallet"
+import { useWallet } from "@/context/WalletContext"
 import { useToast } from "@/hooks/use-toast"
 import { Wallet, Copy, LogOut } from "lucide-react"
+import { formatAddress } from "@/lib/wallet"
+import { createWalletManager } from "@/lib/wallet-manager"
+
+interface WalletOption {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  requiresApiKey?: boolean;
+}
+
+const WALLET_OPTIONS: WalletOption[] = [
+  {
+    id: 'xaman',
+    name: 'Xaman',
+    icon: '🔷',
+    description: 'Mobile wallet with OAuth',
+    requiresApiKey: true,
+  },
+  {
+    id: 'walletconnect',
+    name: 'WalletConnect',
+    icon: '🔗',
+    description: 'Scan QR with any wallet',
+    requiresApiKey: true,
+  },
+  {
+    id: 'crossmark',
+    name: 'Crossmark',
+    icon: '✖️',
+    description: 'Browser extension',
+  },
+  {
+    id: 'gemwallet',
+    name: 'GemWallet',
+    icon: '💎',
+    description: 'Browser extension',
+  },
+];
 
 export function WalletButton() {
-  const { address, isConnected, setWallet, disconnect } = useWalletStore()
+  const { walletManager, isConnected, accountInfo, setWalletManager, setIsConnected, setAccountInfo } = useWallet()
   const { toast } = useToast()
   const [isConnecting, setIsConnecting] = useState(false)
-  const [showUnsupportedDialog, setShowUnsupportedDialog] = useState(false)
+  const [showWalletModal, setShowWalletModal] = useState(false)
+  const [availableWallets, setAvailableWallets] = useState<WalletOption[]>([])
 
-  const handleConnect = async () => {
-    setIsConnecting(true)
-    try {
-      const walletAddress = await connectGemWallet()
-      setWallet(walletAddress)
-      toast({
-        title: "Wallet connected",
-        description: `Connected to ${formatAddress(walletAddress)}`,
-      })
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes("not installed")) {
-          setShowUnsupportedDialog(true)
-        } else {
-          toast({
-            title: "Connection failed",
-            description: error.message,
-            variant: "destructive",
-          })
-        }
-      }
-    } finally {
-      setIsConnecting(false)
+  // Initialiser le WalletManager si non présent
+  useEffect(() => {
+    if (!walletManager) {
+      const manager = createWalletManager();
+      setWalletManager(manager);
+      console.log('✅ WalletManager initialisé');
     }
-  }
+  }, [walletManager, setWalletManager]);
+
+  // Charger les wallets disponibles
+  useEffect(() => {
+    const loadAvailableWallets = async () => {
+      if (!walletManager) return;
+
+      // Pour xrpl-connect 0.3.0, on affiche tous les wallets configurés
+      // Les adapters vérifient la disponibilité au moment de la connexion
+      setAvailableWallets(WALLET_OPTIONS);
+    };
+
+    loadAvailableWallets();
+  }, [walletManager]);
+
+  const handleConnectWallet = async (walletId: string) => {
+    if (!walletManager) {
+      toast({
+        title: "Erreur",
+        description: "WalletManager non initialisé",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConnecting(true);
+    try {
+      console.log(`🔌 Tentative de connexion avec ${walletId}...`);
+      
+      // Trouver l'adapter correspondant au walletId
+      const adapters = (walletManager as any).adapters || [];
+      const adapter = adapters.find((a: any) => {
+        const adapterId = a.id || a.name?.toLowerCase().replace(/\s+/g, '');
+        return adapterId === walletId || a.name?.toLowerCase().includes(walletId);
+      });
+
+      if (!adapter) {
+        throw new Error(`Wallet ${walletId} non trouvé ou non configuré`);
+      }
+
+      console.log(`✅ Adapter trouvé:`, adapter.name || adapter.id);
+
+      // Vérifier la disponibilité
+      const isAvailable = typeof adapter.isAvailable === 'function' 
+        ? await adapter.isAvailable() 
+        : true;
+
+      if (!isAvailable) {
+        throw new Error(`${adapter.name || walletId} n'est pas disponible. Vérifiez l'extension ou l'API key.`);
+      }
+
+      // Connecter via l'adapter
+      console.log(`🔄 Connexion en cours...`);
+      const account = await adapter.connect();
+      console.log(`🎉 Compte reçu:`, account);
+
+      // Mettre à jour le state directement
+      if (account && account.address) {
+        console.log(`✅ Connexion réussie à ${account.address}`);
+        setIsConnected(true);
+        setAccountInfo({
+          address: account.address,
+          publicKey: account.publicKey,
+          network: account.network || { name: 'testnet' }
+        });
+      }
+      
+      setShowWalletModal(false);
+      toast({
+        title: "Wallet connecté",
+        description: `Connecté avec ${adapter.name || walletId}`,
+      });
+    } catch (error) {
+      console.error('❌ Erreur de connexion:', error);
+      toast({
+        title: "Connexion échouée",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   const handleCopyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address)
+    if (accountInfo?.address) {
+      navigator.clipboard.writeText(accountInfo.address)
       toast({
-        title: "Address copied",
-        description: "Wallet address copied to clipboard",
+        title: "Adresse copiée",
+        description: "Adresse du wallet copiée",
       })
     }
   }
 
-  const handleDisconnect = () => {
-    disconnect()
-    toast({
-      title: "Wallet disconnected",
-      description: "Your wallet has been disconnected",
-    })
+  const handleDisconnect = async () => {
+    try {
+      // Réinitialiser le state
+      setIsConnected(false);
+      setAccountInfo(null);
+      
+      toast({
+        title: "Wallet déconnecté",
+        description: "Votre wallet a été déconnecté",
+      });
+    } catch (error) {
+      console.error('Erreur de déconnexion:', error);
+    }
   }
 
-  if (!isConnected || !address) {
+  if (!isConnected || !accountInfo) {
     return (
       <>
-        <Button onClick={handleConnect} disabled={isConnecting}>
+        <Button onClick={() => setShowWalletModal(true)} disabled={isConnecting}>
           <Wallet className="mr-2 h-4 w-4" />
           {isConnecting ? "Connecting..." : "Connect Wallet"}
         </Button>
 
-        <Dialog open={showUnsupportedDialog} onOpenChange={setShowUnsupportedDialog}>
+        <Dialog open={showWalletModal} onOpenChange={setShowWalletModal}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>GemWallet Required</DialogTitle>
-              <DialogDescription className="space-y-4">
-                <p>This platform requires GemWallet to interact with XRPL testnet.</p>
-                <p>Please install the GemWallet browser extension and ensure you're connected to the XRPL Testnet.</p>
+              <DialogTitle>Connect Wallet</DialogTitle>
+              <DialogDescription>
+                Choisissez votre wallet XRPL pour vous connecter
               </DialogDescription>
             </DialogHeader>
-            <Button asChild>
-              <a href="https://gemwallet.app" target="_blank" rel="noopener noreferrer">
-                Get GemWallet
-              </a>
-            </Button>
+            <div className="grid gap-4 py-4">
+              {availableWallets.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Chargement des wallets disponibles...
+                </p>
+              )}
+              {availableWallets.map((wallet) => (
+                <Button
+                  key={wallet.id}
+                  variant="outline"
+                  className="w-full justify-start h-auto py-4"
+                  onClick={() => handleConnectWallet(wallet.id)}
+                  disabled={isConnecting}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{wallet.icon}</span>
+                    <div className="text-left">
+                      <div className="font-semibold">{wallet.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {wallet.description}
+                        {wallet.requiresApiKey && !process.env[`NEXT_PUBLIC_${wallet.id.toUpperCase()}_API_KEY`] && (
+                          <span className="text-orange-500"> (API key requise)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <p>💡 Crossmark et GemWallet sont des extensions navigateur</p>
+              <p>🔑 Xaman et WalletConnect nécessitent des API keys</p>
+            </div>
           </DialogContent>
         </Dialog>
       </>
@@ -99,7 +237,7 @@ export function WalletButton() {
       <DropdownMenuTrigger asChild>
         <Button variant="outline">
           <Wallet className="mr-2 h-4 w-4" />
-          {formatAddress(address)}
+          {formatAddress(accountInfo.address)}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

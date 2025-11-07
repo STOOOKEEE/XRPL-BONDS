@@ -22,8 +22,11 @@
  * ═══════════════════════════════════════════════════════════════════════
  */
 
+// Guard function - Protection contre les boucles infinies
+extern int32_t _g(uint32_t id, uint32_t maxiter);
+
 // Hook State - Lecture/Écriture
-extern int64_t hook_state(
+extern int64_t state(
     uint32_t write_ptr,
     uint32_t write_len,
     uint32_t kread_ptr,
@@ -46,6 +49,13 @@ extern int64_t otxn_field(
 
 extern int64_t otxn_slot(
     uint32_t slot_no
+);
+
+extern int64_t otxn_param(
+    uint32_t write_ptr,
+    uint32_t write_len,
+    uint32_t read_ptr,
+    uint32_t read_len
 );
 
 // Émission de transactions
@@ -125,7 +135,10 @@ extern int64_t util_accid(
 static void _memcpy(void* dest, const void* src, uint32_t n) {
     uint8_t* d = (uint8_t*)dest;
     const uint8_t* s = (const uint8_t*)src;
-    for (uint32_t i = 0; i < n; ++i) d[i] = s[i];
+    for (uint32_t i = 0; i < n; ++i) {
+        _g(3, 1);  // Guard pour boucle
+        d[i] = s[i];
+    }
 }
 
 /* Comparaison mémoire */
@@ -133,6 +146,7 @@ static int _memcmp(const void* a, const void* b, uint32_t n) {
     const uint8_t* aa = (const uint8_t*)a;
     const uint8_t* bb = (const uint8_t*)b;
     for (uint32_t i = 0; i < n; ++i) {
+        _g(4, 1);  // Guard pour boucle
         if (aa[i] != bb[i]) return aa[i] - bb[i];
     }
     return 0;
@@ -141,13 +155,20 @@ static int _memcmp(const void* a, const void* b, uint32_t n) {
 /* Remplir mémoire */
 static void _memset(void* dest, uint8_t val, uint32_t n) {
     uint8_t* d = (uint8_t*)dest;
-    for (uint32_t i = 0; i < n; ++i) d[i] = val;
+    for (uint32_t i = 0; i < n; ++i) {
+        _g(5, 1);  // Guard pour boucle
+        d[i] = val;
+    }
 }
 
 /* Longueur de string */
 static uint32_t _strlen(const char* s) {
     uint32_t len = 0;
-    while (s[len]) len++;
+    while (s[len]) {
+        _g(7, 1);  // Guard pour boucle strlen
+        len++;
+        if (len > 256) break;  // Protection
+    }
     return len;
 }
 
@@ -162,13 +183,17 @@ static void uint64_to_str(uint64_t val, char* out, uint32_t max_len) {
     
     char temp[32];
     uint32_t pos = 0;
+    uint32_t guard = 0;
     while (val > 0 && pos < 31) {
+        _g(1, 1);  // Guard
         temp[pos++] = '0' + (val % 10);
         val /= 10;
+        if (++guard > 25) break;  // Protection supplémentaire
     }
     
     // Reverse
     for (uint32_t i = 0; i < pos && i < max_len - 1; ++i) {
+        _g(1, 1);  // Guard pour boucle reverse
         out[i] = temp[pos - 1 - i];
     }
     out[pos < max_len ? pos : max_len - 1] = 0;
@@ -177,9 +202,12 @@ static void uint64_to_str(uint64_t val, char* out, uint32_t max_len) {
 /* Conversion string vers uint64 */
 static uint64_t str_to_uint64(const char* s) {
     uint64_t result = 0;
+    uint32_t guard = 0;
     while (*s >= '0' && *s <= '9') {
+        _g(2, 1);  // Guard
         result = result * 10 + (*s - '0');
         s++;
+        if (++guard > 25) break;  // Protection supplémentaire
     }
     return result;
 }
@@ -192,7 +220,7 @@ static uint64_t str_to_uint64(const char* s) {
 
 /* Lire une valeur du Hook State */
 static int64_t read_state(const char* key, uint8_t* out, uint32_t out_len) {
-    return hook_state(
+    return state(
         (uint32_t)out,
         out_len,
         (uint32_t)key,
@@ -255,6 +283,7 @@ static void handle_payment(const uint8_t* from_addr, uint64_t amount) {
     /* Convertir l'adresse (20 bytes) en hex string */
     const char hex_chars[] = "0123456789ABCDEF";
     for (uint32_t i = 0; i < ADDR_SIZE && (8 + i*2) < sizeof(key) - 1; i++) {
+        _g(6, 1);  // Guard pour boucle
         key[8 + i*2] = hex_chars[(from_addr[i] >> 4) & 0xF];
         key[8 + i*2 + 1] = hex_chars[from_addr[i] & 0xF];
     }
@@ -321,7 +350,51 @@ int64_t hook(uint32_t reserved) {
     debug_trace("Hook fired", 0);
     
     /* 
-     * ÉTAPE 1 : Lire le type de transaction
+     * ÉTAPE 1 : Lire les paramètres Hook lors du premier appel (SetHook)
+     * Si ce n'est pas encore fait, initialiser target_amount et beneficiary_address
+     */
+    uint8_t check_init[4];
+    _memset(check_init, 0, sizeof(check_init));
+    
+    if (read_state("initialized", check_init, sizeof(check_init)) < 0) {
+        /* Première exécution - lire les HookParameters */
+        uint8_t param_target[32];
+        uint8_t param_beneficiary[ADDR_SIZE];
+        
+        _memset(param_target, 0, sizeof(param_target));
+        _memset(param_beneficiary, 0, sizeof(param_beneficiary));
+        
+        /* Lire target_amount depuis HookParameter */
+        int64_t target_len = otxn_param(
+            (uint32_t)param_target, 
+            sizeof(param_target),
+            (uint32_t)"target_amount",
+            13
+        );
+        
+        if (target_len > 0) {
+            write_state("target_amount", param_target, target_len);
+        }
+        
+        /* Lire beneficiary_address depuis HookParameter */
+        int64_t benef_len = otxn_param(
+            (uint32_t)param_beneficiary,
+            sizeof(param_beneficiary),
+            (uint32_t)"beneficiary_address",
+            19
+        );
+        
+        if (benef_len > 0) {
+            write_state("beneficiary_address", param_beneficiary, benef_len);
+        }
+        
+        /* Marquer comme initialisé */
+        write_state("initialized", (uint8_t*)"1", 1);
+        debug_trace("Hook initialized with parameters", 0);
+    }
+    
+    /* 
+     * ÉTAPE 2 : Lire le type de transaction
      */
     uint32_t tt;
     if (otxn_field((uint32_t)&tt, 4, sfTransactionType) < 0) {

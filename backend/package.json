@@ -3,5 +3,7 @@
   "version": "0.0.0",
   "description": "Placeholder - backend server removed in favor of XRPL Hooks",
   "private": true,
-  "scripts": {}
+  "scripts": {
+    "create-mptoken": "ts-node ./mptoken/index.ts"
+  }
 }

@@ -5,5 +5,14 @@
   "private": true,
   "scripts": {
     "create-mptoken": "ts-node ./mptoken/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "xrpl": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

@@ -1,193 +1,178 @@
-'use client';
+"use client"
 
-import { useState } from 'react';
-import { useWallet } from '@/contexts/WalletContext';
-import { useVault } from '@/hooks/useVault';
-import { WalletConnect } from '@/components/WalletConnect';
-import styles from './page.module.css';
+import { useEffect, useState } from "react"
+import { motion } from "framer-motion"
+import { Button } from "@/components/ui/button"
+import { Header } from "@/components/header"
+import { Leaderboard } from "@/components/leaderboard"
+import { BondDetailModal } from "@/components/bonds"
+import { useWalletStore } from "@/lib/store"
+import { connectGemWallet } from "@/lib/wallet"
+import { MOCK_BONDS } from "@/lib/bonds"
+import { useToast } from "@/hooks/use-toast"
+import type { Bond } from "@/lib/bonds"
+import Link from "next/link"
+import { TrendingUp, Shield, Globe } from "lucide-react"
 
-export default function Home() {
-  const { wallet, isConnected } = useWallet();
-  const { createVault, contribute, getStatus, finalize, listAll, loading, error, currentVault } = useVault();
-  
-  const [vaultId, setVaultId] = useState('');
-  const [amount, setAmount] = useState('100');
-  const [targetAmount, setTargetAmount] = useState('1000');
+export default function HomePage() {
+  const { isConnected, setWallet } = useWalletStore()
+  const { toast } = useToast()
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [selectedBond, setSelectedBond] = useState<Bond | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const handleCreateVault = async () => {
+  const closedBonds = MOCK_BONDS.filter((bond) => bond.status === "CLOSED" || bond.raised >= bond.principalTarget)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShowLeaderboard(true)
+        }
+      },
+      { threshold: 0.1 },
+    )
+
+    const leaderboardSection = document.getElementById("leaderboard-section")
+    if (leaderboardSection) {
+      observer.observe(leaderboardSection)
+    }
+
+    return () => observer.disconnect()
+  }, [])
+
+  const handleConnect = async () => {
+    setIsConnecting(true)
     try {
-      const result = await createVault({
-        targetAmount,
-        tokenSymbol: 'MTP',
-        recipientAddress: wallet?.address || 'rN7n7otQDd6FczFgLdlqXRwRQULis8wbgr',
-        signers: [
-          { address: 'rHb9CJAWyB4GB55kcNq6dkV6sPrwfWzHE', weight: 1 },
-          { address: 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', weight: 1 },
-        ],
-        requiredSignatures: 2,
-      });
-      
-      setVaultId(result.vaultId);
-      alert(`✅ Vault created: ${result.vaultId}`);
-    } catch (err) {
-      alert(`❌ Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const address = await connectGemWallet()
+      setWallet(address)
+      toast({
+        title: "Wallet connected",
+        description: "Ready to invest in tokenized bonds",
+      })
+    } catch (error) {
+      if (error instanceof Error) {
+        toast({
+          title: "Connection failed",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setIsConnecting(false)
     }
-  };
+  }
 
-  const handleContribute = async () => {
-    if (!vaultId) {
-      alert('❌ Please create a vault first');
-      return;
-    }
-
-    try {
-      const result = await contribute(vaultId, wallet?.address || 'rXXX', amount);
-      alert(`✅ Contributed ${result.contributionAmount} USDC\nProgress: ${result.progress}%`);
-    } catch (err) {
-      alert(`❌ Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleGetStatus = async () => {
-    if (!vaultId) {
-      alert('❌ Please create a vault first');
-      return;
-    }
-
-    try {
-      const status = getStatus(vaultId);
-      alert(`📊 Vault Status:\n${JSON.stringify(status, null, 2)}`);
-    } catch (err) {
-      alert(`❌ Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleFinalize = async () => {
-    if (!vaultId) {
-      alert('❌ Please create a vault first');
-      return;
-    }
-
-    try {
-      const result = await finalize(vaultId, ['sig1', 'sig2']);
-      alert(`✅ Vault finalized!\n${JSON.stringify(result, null, 2)}`);
-    } catch (err) {
-      alert(`❌ Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleListVaults = () => {
-    try {
-      const result = listAll();
-      alert(`📋 Vaults (${result.total}):\n${JSON.stringify(result.vaults, null, 2)}`);
-    } catch (err) {
-      alert(`❌ Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
+  const handleBondClick = (bond: Bond) => {
+    setSelectedBond(bond)
+    setIsModalOpen(true)
+  }
 
   return (
-    <main className={styles.main}>
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <h1>🏦 XRPL Bonds Marketplace</h1>
-          <WalletConnect />
-        </header>
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+      <Header />
 
-        {isConnected && wallet ? (
-          <div className={styles.content}>
-            <section className={styles.section}>
-              <h2>📝 Create Vault</h2>
-              <div className={styles.formGroup}>
-                <label>Target Amount (USDC)</label>
-                <input
-                  type="number"
-                  value={targetAmount}
-                  onChange={(e) => setTargetAmount(e.target.value)}
-                  placeholder="1000"
-                />
-              </div>
-              <button 
-                onClick={handleCreateVault} 
-                disabled={loading}
-                className={styles.btn}
+      <main>
+        {/* Hero Section */}
+        <section className="container mx-auto px-4 py-20 md:py-32">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="max-w-3xl mx-auto text-center space-y-6"
+          >
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-balance">
+              Tokenized Corporate Bonds on <span className="text-primary">XRPL</span>
+            </h1>
+            <p className="text-xl text-muted-foreground text-pretty">
+              Invest in high-quality corporate bonds tokenized on the XRP Ledger. Transparent, accessible, and secure.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+              {!isConnected ? (
+                <Button size="lg" onClick={handleConnect} disabled={isConnecting}>
+                  {isConnecting ? "Connecting..." : "Connect Wallet"}
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" asChild>
+                    <Link href="/invest">Invest</Link>
+                  </Button>
+                  <Button size="lg" variant="outline" asChild>
+                    <Link href="/marketplace">Go to Marketplace</Link>
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+                className="flex flex-col items-center gap-3 p-6 rounded-lg bg-card border"
               >
-                {loading ? '🔄 Creating...' : '✨ Create Vault'}
-              </button>
-              {vaultId && <p className={styles.success}>Vault ID: {vaultId}</p>}
-            </section>
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Globe className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold">XRPL Powered</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  Built on the XRP Ledger for fast, secure transactions
+                </p>
+              </motion.div>
 
-            {vaultId && (
-              <>
-                <section className={styles.section}>
-                  <h2>💳 Contribute to Vault</h2>
-                  <div className={styles.formGroup}>
-                    <label>Amount (USDC)</label>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="100"
-                    />
-                  </div>
-                  <button 
-                    onClick={handleContribute} 
-                    disabled={loading}
-                    className={styles.btn}
-                  >
-                    {loading ? '🔄 Contributing...' : '💰 Contribute'}
-                  </button>
-                </section>
-
-                <section className={styles.section}>
-                  <h2>📊 Vault Status</h2>
-                  <button 
-                    onClick={handleGetStatus} 
-                    disabled={loading}
-                    className={styles.btnSecondary}
-                  >
-                    🔍 Check Status
-                  </button>
-                  {currentVault && (
-                    <div className={styles.statusBox}>
-                      <p><strong>Status:</strong> {currentVault.status}</p>
-                      <p><strong>Progress:</strong> {currentVault.progress}%</p>
-                      <p><strong>Raised:</strong> {currentVault.currentAmount} / {currentVault.targetAmount} USDC</p>
-                      <p><strong>Investors:</strong> {currentVault.investorsCount}</p>
-                    </div>
-                  )}
-                </section>
-
-                <section className={styles.section}>
-                  <h2>🚀 Finalize Vault</h2>
-                  <button 
-                    onClick={handleFinalize} 
-                    disabled={loading}
-                    className={styles.btnDanger}
-                  >
-                    {loading ? '🔄 Finalizing...' : '✅ Finalize Vault'}
-                  </button>
-                </section>
-              </>
-            )}
-
-            <section className={styles.section}>
-              <h2>📋 All Vaults</h2>
-              <button 
-                onClick={handleListVaults}
-                className={styles.btnSecondary}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.5 }}
+                className="flex flex-col items-center gap-3 p-6 rounded-lg bg-card border"
               >
-                📚 List Vaults
-              </button>
-            </section>
-          </div>
-        ) : (
-          <div className={styles.message}>
-            <p>👋 Please connect your wallet to get started</p>
-          </div>
-        )}
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold">Fixed Returns</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  Predictable yields with classic and zero-coupon bonds
+                </p>
+              </motion.div>
 
-        {error && <p className={styles.error}>{error}</p>}
-      </div>
-    </main>
-  );
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+                className="flex flex-col items-center gap-3 p-6 rounded-lg bg-card border"
+              >
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold">Transparent</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  All transactions on-chain with full visibility
+                </p>
+              </motion.div>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Leaderboard Section */}
+        <section id="leaderboard-section" className="container mx-auto px-4 py-16 md:py-24">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={showLeaderboard ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2">Available Bonds</h2>
+              <p className="text-muted-foreground">Browse fully funded corporate bonds from verified issuers</p>
+            </div>
+
+            <Leaderboard bonds={closedBonds} viewOnly showInvestButton={false} onBondClick={handleBondClick} />
+          </motion.div>
+        </section>
+      </main>
+
+      <BondDetailModal bond={selectedBond} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </div>
+  )
 }

@@ -10,9 +10,7 @@
   "keywords": ["xrpl", "vault", "bonds", "multisig"],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "xrpl": "^4.4.2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "dotenv": "^17.2.3"
   }

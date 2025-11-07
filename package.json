@@ -32,7 +32,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/IXH25-Clim/Bonds-Marketplace/issues"
   },

@@ -46,10 +46,10 @@ export default function WalletTestPage() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <h1>🔐 XRPL Wallet Connection Test</h1>
+        <h1 className={styles.title}>🔐 XRPL Wallet Connection Test</h1>
 
         <section className={styles.section}>
-          <h2>Connection Status</h2>
+          <h2 className={styles.subtitle}>Connection Status</h2>
           <div className={styles.statusBox}>
             {isConnected ? (
               <>
@@ -73,7 +73,7 @@ export default function WalletTestPage() {
         </section>
 
         <section className={styles.section}>
-          <h2>Wallet Controls</h2>
+          <h2 className={styles.subtitle}>Wallet Controls</h2>
           <div className={styles.buttonGroup}>
             {!isConnected ? (
               <button 
@@ -100,7 +100,7 @@ export default function WalletTestPage() {
         </section>
 
         <section className={styles.section}>
-          <h2>Transaction Test</h2>
+          <h2 className={styles.subtitle}>Transaction Test</h2>
           <p>Test wallet signing capability by signing a dummy transaction.</p>
           <button 
             onClick={handleTestTransaction}
@@ -117,7 +117,7 @@ export default function WalletTestPage() {
         </section>
 
         <section className={styles.section}>
-          <h2>🔗 Supported Wallets</h2>
+          <h2 className={styles.subtitle}>🔗 Supported Wallets</h2>
           <div className={styles.walletList}>
             <div className={styles.walletItem}>
               <h3>Crossmark</h3>
@@ -137,7 +137,7 @@ export default function WalletTestPage() {
         </section>
 
         <section className={styles.section}>
-          <h2>📚 Documentation</h2>
+          <h2 className={styles.subtitle}>📚 Documentation</h2>
           <ul>
             <li><a href="#" className={styles.link}>Wallet Integration Guide</a></li>
             <li><a href="https://docs.crossmark.io/" target="_blank" rel="noopener noreferrer" className={styles.link}>Crossmark Docs</a></li>

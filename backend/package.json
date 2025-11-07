@@ -1,17 +1,7 @@
 {
-  "name": "xrpl-bonds-lib",
-  "version": "1.0.0",
-  "description": "Librairie XRPL Bonds Vault - Gestion des vaults avec multi-sig",
-  "main": "src/index.js",
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  },
-  "keywords": ["xrpl", "vault", "bonds", "multisig"],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {},
-  "devDependencies": {
-    "dotenv": "^17.2.3"
-  }
+  "name": "backend-removed",
+  "version": "0.0.0",
+  "description": "Placeholder - backend server removed in favor of XRPL Hooks",
+  "private": true,
+  "scripts": {}
 }

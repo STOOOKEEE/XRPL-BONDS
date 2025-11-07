@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import * as VaultOps from '@/../backend/src/lib/vaultOps';
+import * as VaultOps from '@/lib/vaultOps';
 
 /**
  * Hook React pour gérer les vaults XRPL Bonds

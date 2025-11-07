@@ -13,14 +13,14 @@
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
-h1 {
+.title {
   color: #333;
   margin-bottom: 30px;
   text-align: center;
   font-size: 2em;
 }
 
-h2 {
+.subtitle {
   color: #667eea;
   margin-top: 30px;
   margin-bottom: 15px;
@@ -202,11 +202,11 @@ h2 {
     padding: 20px;
   }
 
-  h1 {
+  .title {
     font-size: 1.5em;
   }
 
-  h2 {
+  .subtitle {
     font-size: 1.2em;
   }
 

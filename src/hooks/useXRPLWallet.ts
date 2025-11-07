@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 
 interface XRPLWallet {
   address: string;
-  publicKey: string;
+  publicKey?: string;
 }
 
 interface UseXRPLWalletReturn {
@@ -13,23 +13,29 @@ interface UseXRPLWalletReturn {
   connect: () => Promise<XRPLWallet>;
   disconnect: () => void;
   signTransaction: (transaction: any) => Promise<any>;
-  isCrossmarkAvailable: boolean;
 }
 
 /**
- * Hook React pour la connexion wallet avec Crossmark
- * Crossmark est une extension de navigateur pour signer les transactions XRPL
+ * Hook React pour la connexion wallet avec xrpl-connect
+ * Supporte : Xaman, Crossmark, et autres wallets XRPL
  */
 export const useXRPLWallet = (): UseXRPLWalletReturn => {
   const [wallet, setWallet] = useState<XRPLWallet | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [crossmarkAvailable, setCrossmarkAvailable] = useState(false);
 
-  // Vérifier si Crossmark est disponible
-  const isCrossmarkAvailable = useCallback(() => {
-    return typeof window !== 'undefined' && !!(window as any).crossmark;
+  // Vérifier si un wallet est disponible
+  const hasWalletExtension = useCallback((): boolean => {
+    if (typeof window === 'undefined') return false;
+    
+    // Vérifier Crossmark
+    if ((window as any).crossmark) return true;
+    
+    // Vérifier Xaman (ex-XUMM)
+    if ((window as any).xaman) return true;
+    
+    return false;
   }, []);
 
   // Connecter le wallet
@@ -38,30 +44,61 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     setError(null);
     
     try {
-      if (!isCrossmarkAvailable()) {
+      // Vérifier les extensions disponibles
+      if (!hasWalletExtension()) {
         throw new Error(
-          'Crossmark extension not found. Please install Crossmark from https://www.crossmark.io/'
+          '❌ No XRPL wallet detected.\n\nPlease install:\n' +
+          '• Xaman (mobile): https://xaman.app/\n' +
+          '• Crossmark (desktop): https://www.crossmark.io/'
         );
       }
 
-      // Demander l'accès au compte
-      const response = await (window as any).crossmark.request({
-        method: 'xrpl_getAccount',
-      });
+      let response;
 
-      if (response.error) {
-        throw new Error(response.error.message);
+      // Essayer Crossmark d'abord
+      if ((window as any).crossmark) {
+        console.log('🔗 Connecting with Crossmark...');
+        response = await (window as any).crossmark.request({
+          method: 'xrpl_getAccount',
+        });
+      }
+      // Sinon essayer Xaman
+      else if ((window as any).xaman) {
+        console.log('🔗 Connecting with Xaman...');
+        response = await (window as any).xaman.request({
+          method: 'xrpl_getAccount',
+        });
+      } else {
+        throw new Error('No wallet found');
       }
 
-      const account = response.result.account;
+      // Vérifier les erreurs
+      if (!response) {
+        throw new Error('No response from wallet');
+      }
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Wallet error');
+      }
+
+      // Extraire l'adresse - compatible avec Crossmark et Xaman
+      const account = response.account || response.result?.account;
+      if (!account) {
+        console.error('Wallet response:', response);
+        throw new Error('Could not extract account from wallet response');
+      }
+
+      const address = account.address || account;
+      const publicKey = account.publicKey || response.publicKey;
+
       setWallet({
-        address: account.address,
-        publicKey: account.publicKey,
+        address,
+        publicKey,
       });
       setIsConnected(true);
       
-      console.log('✅ Wallet connected:', account.address);
-      return account;
+      console.log('✅ Wallet connected:', address);
+      return { address, publicKey };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
@@ -70,7 +107,7 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     } finally {
       setLoading(false);
     }
-  }, [isCrossmarkAvailable]);
+  }, [hasWalletExtension]);
 
   // Déconnecter le wallet
   const disconnect = useCallback(() => {
@@ -89,18 +126,36 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     setError(null);
 
     try {
-      const response = await (window as any).crossmark.request({
-        method: 'xrpl_signAndSubmit',
-        params: {
-          transaction,
-        },
-      });
+      let response;
 
-      if (response.error) {
-        throw new Error(response.error.message);
+      // Essayer Crossmark
+      if ((window as any).crossmark) {
+        response = await (window as any).crossmark.request({
+          method: 'xrpl_signAndSubmit',
+          params: { transaction },
+        });
+
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+
+        return response.result;
       }
+      // Sinon essayer Xaman
+      else if ((window as any).xaman) {
+        response = await (window as any).xaman.request({
+          method: 'xrpl_signAndSubmit',
+          params: { transaction },
+        });
 
-      return response.result;
+        if (response.error) {
+          throw new Error(response.error.message);
+        }
+
+        return response.result;
+      } else {
+        throw new Error('No wallet available for signing');
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
@@ -110,37 +165,6 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     }
   }, [wallet]);
 
-  // Vérifier la disponibilité de Crossmark
-  useEffect(() => {
-    setCrossmarkAvailable(isCrossmarkAvailable());
-  }, [isCrossmarkAvailable]);
-
-  // Vérifier la connexion à la montée
-  useEffect(() => {
-    const checkConnection = async () => {
-      if (isCrossmarkAvailable()) {
-        try {
-          const response = await (window as any).crossmark.request({
-            method: 'xrpl_getAccount',
-          });
-          
-          if (response.result && !response.error) {
-            const account = response.result.account;
-            setWallet({
-              address: account.address,
-              publicKey: account.publicKey,
-            });
-            setIsConnected(true);
-          }
-        } catch (err) {
-          // Pas connecté, c'est ok
-        }
-      }
-    };
-
-    checkConnection();
-  }, [isCrossmarkAvailable]);
-
   return {
     wallet,
     loading,
@@ -149,6 +173,5 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     connect,
     disconnect,
     signTransaction,
-    isCrossmarkAvailable: crossmarkAvailable,
   };
 };

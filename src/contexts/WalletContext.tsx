@@ -4,14 +4,13 @@ import { createContext, useContext, ReactNode } from 'react';
 import { useXRPLWallet } from '@/hooks/useXRPLWallet';
 
 interface WalletContextType {
-  wallet: { address: string; publicKey: string } | null;
+  wallet: { address: string; publicKey?: string } | null;
   loading: boolean;
   error: string | null;
   isConnected: boolean;
   connect: () => Promise<any>;
   disconnect: () => void;
   signTransaction: (transaction: any) => Promise<any>;
-  isCrossmarkAvailable: boolean;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);

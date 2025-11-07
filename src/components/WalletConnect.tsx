@@ -4,22 +4,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import styles from './WalletConnect.module.css';
 
 export const WalletConnect = () => {
-  const { wallet, isConnected, loading, error, connect, disconnect, isCrossmarkAvailable } = useWallet();
-
-  if (!isCrossmarkAvailable) {
-    return (
-      <div className={styles.container}>
-        <a 
-          href="https://www.crossmark.io/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className={styles.installButton}
-        >
-          📥 Install Crossmark Wallet
-        </a>
-      </div>
-    );
-  }
+  const { wallet, isConnected, loading, error, connect, disconnect } = useWallet();
 
   if (isConnected && wallet) {
     return (

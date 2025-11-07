@@ -35,13 +35,33 @@ declare global {
 }
 
 declare module 'xrpl-connect' {
-  export class XrplConnect {
-    constructor(options?: any);
-    request(request: {
-      method: string;
-      params?: any;
-    }): Promise<any>;
+  export class WalletManager {
+    constructor(options?: {
+      adapters: any[];
+      network: string;
+      autoConnect?: boolean;
+    });
+    connect(): Promise<any>;
+    disconnect(): Promise<void>;
+    sign(transaction: any): Promise<any>;
     on(event: string, callback: (data: any) => void): void;
     off(event: string, callback: (data: any) => void): void;
+    account?: { address: string; publicKey?: string };
+  }
+
+  export class XamanAdapter {
+    constructor();
+  }
+
+  export class CrossmarkAdapter {
+    constructor();
+  }
+
+  export class GemWalletAdapter {
+    constructor();
+  }
+
+  export class WalletConnectAdapter {
+    constructor();
   }
 }

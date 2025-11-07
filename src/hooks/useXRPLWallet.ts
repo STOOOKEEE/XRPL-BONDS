@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { WalletManager, XamanAdapter, CrossmarkAdapter } from 'xrpl-connect';
 
 interface XRPLWallet {
   address: string;
@@ -10,115 +11,134 @@ interface UseXRPLWalletReturn {
   loading: boolean;
   error: string | null;
   isConnected: boolean;
-  connect: () => Promise<XRPLWallet>;
+  connect: () => Promise<void>;
   disconnect: () => void;
   signTransaction: (transaction: any) => Promise<any>;
+  walletManager: WalletManager | null;
 }
 
-/**
- * Hook React pour la connexion wallet avec xrpl-connect
- * Supporte : Xaman, Crossmark, et autres wallets XRPL
- */
+
 export const useXRPLWallet = (): UseXRPLWalletReturn => {
   const [wallet, setWallet] = useState<XRPLWallet | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [walletManager, setWalletManager] = useState<WalletManager | null>(null);
+  const initializingRef = useRef(false);
 
-  // Vérifier si un wallet est disponible
-  const hasWalletExtension = useCallback((): boolean => {
-    if (typeof window === 'undefined') return false;
-    
-    // Vérifier Crossmark
-    if ((window as any).crossmark) return true;
-    
-    // Vérifier Xaman (ex-XUMM)
-    if ((window as any).xaman) return true;
-    
-    return false;
+  // Initialiser le WalletManager une seule fois
+  useEffect(() => {
+    if (initializingRef.current || typeof window === 'undefined') return;
+    initializingRef.current = true;
+
+    try {
+      console.log('📱 Initializing WalletManager...');
+      
+      // Créer le WalletManager avec les adapters
+      const manager = new WalletManager({
+        adapters: [
+          new XamanAdapter(),
+          new CrossmarkAdapter(),
+        ],
+        network: 'testnet',
+        autoConnect: true, // Ne pas connecter automatiquement
+      });
+
+      // Écouter les événements de connexion
+      manager.on('connect', (account: any) => {
+        console.log('✅ WalletManager connected:', account);
+        setWallet({
+          address: account.address,
+          publicKey: account.publicKey,
+        });
+        setIsConnected(true);
+        setError(null);
+      });
+
+      // Écouter les événements de déconnexion
+      manager.on('disconnect', () => {
+        console.log('🔓 WalletManager disconnected');
+        setWallet(null);
+        setIsConnected(false);
+      });
+
+      // Écouter les erreurs
+      manager.on('error', (err: any) => {
+        console.error('❌ WalletManager error:', err);
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        setError(errorMsg);
+      });
+
+      setWalletManager(manager);
+      console.log('✅ WalletManager initialized');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to initialize WalletManager';
+      console.error('❌ Initialization error:', err);
+      setError(errorMsg);
+    }
   }, []);
 
   // Connecter le wallet
   const connect = useCallback(async () => {
+    if (!walletManager) {
+      const msg = 'WalletManager not initialized';
+      console.error('❌', msg);
+      setError(msg);
+      throw new Error(msg);
+    }
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Vérifier les extensions disponibles
-      if (!hasWalletExtension()) {
-        throw new Error(
-          '❌ No XRPL wallet detected.\n\nPlease install:\n' +
-          '• Xaman (mobile): https://xaman.app/\n' +
-          '• Crossmark (desktop): https://www.crossmark.io/'
-        );
-      }
-
-      let response;
-
-      // Essayer Crossmark d'abord
-      if ((window as any).crossmark) {
-        console.log('🔗 Connecting with Crossmark...');
-        response = await (window as any).crossmark.request({
-          method: 'xrpl_getAccount',
-        });
-      }
-      // Sinon essayer Xaman
-      else if ((window as any).xaman) {
-        console.log('🔗 Connecting with Xaman...');
-        response = await (window as any).xaman.request({
-          method: 'xrpl_getAccount',
-        });
-      } else {
-        throw new Error('No wallet found');
-      }
-
-      // Vérifier les erreurs
-      if (!response) {
-        throw new Error('No response from wallet');
-      }
-
-      if (response.error) {
-        throw new Error(response.error.message || 'Wallet error');
-      }
-
-      // Extraire l'adresse - compatible avec Crossmark et Xaman
-      const account = response.account || response.result?.account;
-      if (!account) {
-        console.error('Wallet response:', response);
-        throw new Error('Could not extract account from wallet response');
-      }
-
-      const address = account.address || account;
-      const publicKey = account.publicKey || response.publicKey;
-
-      setWallet({
-        address,
-        publicKey,
-      });
-      setIsConnected(true);
+      console.log('🔗 Attempting to connect wallet...');
       
-      console.log('✅ Wallet connected:', address);
-      return { address, publicKey };
+      // Le WalletManager s'occupe de tout : détection et connexion
+      await walletManager.connect();
+      
+      console.log('✅ Wallet connected successfully');
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMsg);
-      console.error('❌ Error connecting wallet:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error during connection';
+      console.error('❌ Connection error:', err);
+      
+      // Fournir des instructions d'installation si le wallet n'est pas détecté
+      if (errorMsg.includes('No adapter') || errorMsg.includes('not available')) {
+        setError(
+          '❌ No XRPL wallet detected.\n\n' +
+          'Please install:\n' +
+          '• Xaman: https://xaman.app/\n' +
+          '• Crossmark: https://www.crossmark.io/'
+        );
+      } else {
+        setError(errorMsg);
+      }
+      
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [hasWalletExtension]);
+  }, [walletManager]);
 
   // Déconnecter le wallet
-  const disconnect = useCallback(() => {
-    setWallet(null);
-    setIsConnected(false);
-    console.log('🔓 Wallet disconnected');
-  }, []);
+  const disconnect = useCallback(async () => {
+    if (!walletManager) return;
+
+    try {
+      console.log('🔓 Disconnecting wallet...');
+      await walletManager.disconnect();
+      console.log('✅ Wallet disconnected');
+    } catch (err) {
+      console.error('❌ Disconnect error:', err);
+    }
+  }, [walletManager]);
 
   // Signer une transaction
   const signTransaction = useCallback(async (transaction: any) => {
-    if (!wallet) {
+    if (!walletManager) {
+      throw new Error('WalletManager not initialized');
+    }
+
+    if (!isConnected || !walletManager.account) {
       throw new Error('Wallet not connected');
     }
 
@@ -126,44 +146,28 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     setError(null);
 
     try {
-      let response;
+      console.log('📝 Signing transaction...');
 
-      // Essayer Crossmark
-      if ((window as any).crossmark) {
-        response = await (window as any).crossmark.request({
-          method: 'xrpl_signAndSubmit',
-          params: { transaction },
-        });
+      // Ajouter l'account au transaction s'il n'y est pas
+      const tx = {
+        ...transaction,
+        Account: transaction.Account || walletManager.account.address,
+      };
 
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-
-        return response.result;
-      }
-      // Sinon essayer Xaman
-      else if ((window as any).xaman) {
-        response = await (window as any).xaman.request({
-          method: 'xrpl_signAndSubmit',
-          params: { transaction },
-        });
-
-        if (response.error) {
-          throw new Error(response.error.message);
-        }
-
-        return response.result;
-      } else {
-        throw new Error('No wallet available for signing');
-      }
+      // Signer et soumettre
+      const signed = await walletManager.sign(tx);
+      
+      console.log('✅ Transaction signed:', signed);
+      return signed;
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error during signing';
+      console.error('❌ Signing error:', err);
       setError(errorMsg);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [wallet]);
+  }, [walletManager, isConnected]);
 
   return {
     wallet,
@@ -173,5 +177,6 @@ export const useXRPLWallet = (): UseXRPLWalletReturn => {
     connect,
     disconnect,
     signTransaction,
+    walletManager,
   };
 };

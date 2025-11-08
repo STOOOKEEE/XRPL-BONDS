@@ -14,37 +14,47 @@ export default function XamanOAuth2CallbackPage() {
   useEffect(() => {
     const handleOAuth2Callback = async () => {
       try {
-        // Récupérer le hash fragment (après #) qui contient le token
-        const hash = window.location.hash
+        // Récupérer le token depuis le hash fragment (#) ou les query params (?)
+        let access_token: string | null = null
         
-        if (!hash) {
-          throw new Error('Aucun token OAuth2 reçu')
+        // Essayer d'abord le hash fragment (standard OAuth2 implicit flow)
+        const hash = window.location.hash
+        if (hash) {
+          const parsed = parseOAuth2Hash(hash)
+          access_token = parsed.access_token
         }
-
-        const { access_token } = parseOAuth2Hash(hash)
+        
+        // Si pas dans le hash, essayer les query params (Xaman semble utiliser ça)
+        if (!access_token) {
+          const params = new URLSearchParams(window.location.search)
+          access_token = params.get('access_token')
+        }
         
         if (!access_token) {
           throw new Error('Token d\'accès manquant')
         }
+        
+        console.log('✅ Token OAuth2 reçu:', access_token.substring(0, 20) + '...')
 
         setStatus("Récupération des informations du compte...")
 
-        // Utiliser le JWT pour récupérer les infos utilisateur
-        const response = await fetch('https://xumm.app/api/v1/platform/me', {
-          headers: {
-            'Authorization': `Bearer ${access_token}`,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error('Impossible de récupérer les informations du compte')
+        // Décoder le JWT pour obtenir les infos (le token contient déjà les infos)
+        // Format JWT: header.payload.signature
+        const parts = access_token.split('.')
+        if (parts.length !== 3) {
+          throw new Error('Token JWT invalide')
         }
 
-        const userData = await response.json()
-        console.log('📦 User data:', userData)
+        // Décoder la partie payload (base64url)
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+        console.log('📦 JWT payload:', payload)
 
-        if (!userData.account) {
-          throw new Error('Aucune adresse de compte trouvée')
+        // Le payload contient: sub (account address), aud, iss, etc.
+        const account = payload.sub
+        const networkType = payload.nettype || payload.network || 'TESTNET'
+
+        if (!account) {
+          throw new Error('Aucune adresse de compte trouvée dans le token')
         }
 
         setStatus("Connexion réussie ! Redirection...")
@@ -52,9 +62,9 @@ export default function XamanOAuth2CallbackPage() {
         // Mettre à jour le contexte wallet
         setIsConnected(true)
         setAccountInfo({
-          address: userData.account,
+          address: account,
           publicKey: '',
-          network: { name: userData.networkType === 'MAINNET' ? 'mainnet' : 'testnet' }
+          network: { name: networkType.toUpperCase() === 'MAINNET' ? 'mainnet' : 'testnet' }
         })
 
         // Afficher un message de succès

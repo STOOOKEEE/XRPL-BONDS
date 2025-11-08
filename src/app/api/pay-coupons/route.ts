@@ -13,7 +13,7 @@ import { MongoClient } from 'mongodb';
 // On suppose que tous les coupons sont payés dans la même monnaie (ex: USDC)
 const PAYMENT_CURRENCY = "USDC";
 // ❗️ REMPLACEZ CECI par l'adresse de l'émetteur du VRAI USDC (ex: Circle)
-const PAYMENT_ISSUER = "rCircleIssuer...Address";
+const PAYMENT_ISSUER = process.env.PAYMENT_ISSUER_ADDRESS || "rDxsuBd4N45CoVPJggaxHi8zTowN7YnQrg";
 
 /*
 =====================================================

@@ -207,7 +207,7 @@ Créez un fichier `backend/.env` :
 
 ```bash
 # MongoDB
-MONGODB_URI=mongodb://localhost:27017/xrpl-bonds
+MONGODB_URI=mongodb+srv://xrpluser:HaCcXpg6cz0FPpQV@cluster0.ml4qq54.mongodb.net/xrpl-bonds?retryWrites=true&w=majority&appName=Cluster0
 
 # XRPL
 XRPL_URL=wss://s.altnet.rippletest.net:51233

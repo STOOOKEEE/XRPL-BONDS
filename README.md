@@ -206,9 +206,6 @@ FROM_EMAIL=onboarding@resend.dev
 Créez un fichier `backend/.env` :
 
 ```bash
-# MongoDB
-MONGODB_URI=mongodb+srv://xrpluser:HaCcXpg6cz0FPpQV@cluster0.ml4qq54.mongodb.net/xrpl-bonds?retryWrites=true&w=majority&appName=Cluster0
-
 # XRPL
 XRPL_URL=wss://s.altnet.rippletest.net:51233
 ISSUER_SEED=sYourIssuerSeedHere
@@ -217,15 +214,30 @@ ISSUER_SEED=sYourIssuerSeedHere
 PORT=3001
 ```
 
-### 3. Démarrer MongoDB
+### 3. Access to the MongoDB Database
 
-```bash
-# macOS
-brew services start mongodb-community
+A read-only MongoDB user has been created so the jury can explore and verify the project's database.
 
-# Linux
-sudo systemctl start mongod
+**Connection details:**
+
 ```
+mongodb+srv://jury_readonly:<password>@cluster0.ml4qq54.mongodb.net/xrpl-bonds?retryWrites=true&w=majority&appName=Cluster0
+```
+
+Replace `<password>` with the password provided separately.
+
+**How to test the connection:**
+
+1. Open MongoDB Compass or any MongoDB client.
+2. Paste the connection string above into the connection field.
+3. Connect to the database named `xrpl-bonds`.
+4. You will see the following collections:
+   - `bonds` — list of all issued or pending corporate bonds.
+   - `holders_<bondId>` — list of investors for each bond.
+5. You have read-only access: you can view all documents but not modify them.
+
+**Note:**  
+Access is open from any IP (0.0.0.0/0) for evaluation purposes only. It will be restricted after the review period.
 
 ---
 

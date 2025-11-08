@@ -13,6 +13,8 @@
     "sync-holders": "ts-node src/scripts/sync-holders.ts",
     "execute-coupons": "ts-node src/scripts/execute-coupons.ts",
     "test-workflow": "ts-node src/scripts/test-complete-workflow.ts"
+    ,
+    "build-escrow-wasm": "cd escrow-wasm && wasm-pack build --target nodejs --out-dir ../pkg/escrow --release"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

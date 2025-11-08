@@ -12,12 +12,13 @@ const WS_URL = process.env.XRPL_WEBSOCKET_URL ?? 'wss://wasm.devnet.rippletest.n
 
 async function createAndFund() {
   const client = new Client(WS_URL);
+  // Prepare faucetOptions here so it's visible to the fallback handler below
+  let faucetOptions: any = {};
   try {
     await client.connect();
     // fundWallet is a devnet helper that returns a funded wallet
     // If XRPL_FAUCET_URL is set in .env (e.g. https://wasmfaucet.devnet.rippletest.net/accounts),
     // parse it and pass faucetHost/faucetPath to fundWallet so xrpl.js can call the correct faucet.
-    let faucetOptions: any = {}
     if (process.env.XRPL_FAUCET_URL) {
       try {
         const u = new URL(process.env.XRPL_FAUCET_URL);
@@ -54,8 +55,45 @@ async function createAndFund() {
 
     return out;
   } catch (err) {
-    console.error('Failed to create and fund wallet:', err);
-    throw err;
+    console.error('fundWallet() failed, attempting direct faucet POST fallback:', err);
+
+    // Fallback: call the faucet URL directly with a POST (some faucets accept empty POST -> fund)
+    const faucetUrl = process.env.XRPL_FAUCET_URL ?? `https://${faucetOptions.faucetHost}${faucetOptions.faucetPath}`;
+    if (!faucetUrl) {
+      console.error('No faucet URL available for fallback. Aborting.');
+      throw err;
+    }
+
+    // Try a few times in case of transient errors
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; ++attempt) {
+      try {
+        console.log(`POSTing to faucet (attempt ${attempt}): ${faucetUrl}`);
+        const res = await fetch(faucetUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Faucet returned ${res.status}: ${txt}`);
+        }
+        const body = await res.json();
+        // Expected shape: { account: { address, xAddress, classicAddress }, seed, amount, transactionHash }
+        const account = body.account ?? body.address ?? null;
+        const seed = body.seed ?? body.secret ?? null;
+        const address = (account && (account.address || account.classicAddress)) || body.address || null;
+        const publicKey = null;
+
+        const out = { address, seed, publicKey };
+        console.log(JSON.stringify(out, null, 2));
+        return out;
+      } catch (e) {
+        console.warn('Faucet POST attempt failed:', (e as any)?.message ?? e);
+        if (attempt === maxAttempts) {
+          console.error('All faucet POST attempts failed.');
+          throw err; // rethrow original fundWallet error
+        }
+        // small backoff
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
   } finally {
     try {
       await client.disconnect();

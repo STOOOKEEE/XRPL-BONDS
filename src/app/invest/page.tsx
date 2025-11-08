@@ -5,22 +5,17 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Header } from "@/components/header"
 import { Leaderboard } from "@/components/leaderboard"
 import { BondDetailModal } from "@/components/bonds"
-import { useWalletStore } from "@/lib/store"
-import { connectGemWallet } from "@/lib/wallet"
+import { useWallet } from "@/context/WalletContext"
 import { MOCK_BONDS } from "@/lib/bonds"
 import type { Bond } from "@/lib/bonds"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
 
 function InvestPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const bondId = searchParams.get("bond")
-  const { isConnected, setWallet } = useWalletStore()
-  const { toast } = useToast()
+  const { isConnected } = useWallet()
   const [selectedBond, setSelectedBond] = useState<Bond | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isConnecting, setIsConnecting] = useState(false)
 
   useEffect(() => {
     if (!isConnected) {
@@ -45,26 +40,9 @@ function InvestPageContent() {
     setIsModalOpen(true)
   }
 
-  const handleConnect = async () => {
-    setIsConnecting(true)
-    try {
-      const address = await connectGemWallet()
-      setWallet(address)
-      toast({
-        title: "Wallet connected",
-        description: "Ready to invest in tokenized bonds",
-      })
-    } catch (error) {
-      if (error instanceof Error) {
-        toast({
-          title: "Connection failed",
-          description: error.message,
-          variant: "destructive",
-        })
-      }
-    } finally {
-      setIsConnecting(false)
-    }
+  const handleOpenModal = (bond: Bond) => {
+    setSelectedBond(bond)
+    setIsModalOpen(true)
   }
 
   if (!isConnected) {
@@ -74,10 +52,9 @@ function InvestPageContent() {
         <main className="container mx-auto px-4 py-16">
           <div className="max-w-md mx-auto text-center space-y-6">
             <h1 className="text-3xl font-bold">Connect Your Wallet</h1>
-            <p className="text-muted-foreground">Please connect your GemWallet to access investment opportunities</p>
-            <Button size="lg" onClick={handleConnect} disabled={isConnecting}>
-              {isConnecting ? "Connecting..." : "Connect Wallet"}
-            </Button>
+            <p className="text-muted-foreground">
+              Please connect your wallet using the button in the header to access investment opportunities
+            </p>
           </div>
         </main>
       </div>

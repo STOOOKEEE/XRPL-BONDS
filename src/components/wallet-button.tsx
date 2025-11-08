@@ -97,31 +97,56 @@ export function WalletButton() {
     try {
       console.log(`🔌 Tentative de connexion avec ${walletId}...`);
       
-      // Trouver l'adapter correspondant au walletId
-      const adapters = (walletManager as any).adapters || [];
-      const adapter = adapters.find((a: any) => {
-        const adapterId = a.id || a.name?.toLowerCase().replace(/\s+/g, '');
-        return adapterId === walletId || a.name?.toLowerCase().includes(walletId);
-      });
-
-      if (!adapter) {
-        throw new Error(`Wallet ${walletId} non trouvé ou non configuré`);
+      let account: any = null;
+      
+      // Connexion directe selon le wallet choisi
+      switch(walletId) {
+        case 'gemwallet':
+          console.log(`� Connexion GemWallet via @gemwallet/api...`);
+          const { isInstalled, getAddress } = await import('@gemwallet/api');
+          const installed = await isInstalled();
+          if (!installed) {
+            throw new Error('GemWallet n\'est pas installé. Installez l\'extension depuis https://gemwallet.app/');
+          }
+          const response = await getAddress();
+          if (response.type === 'response' && response.result?.address) {
+            account = {
+              address: response.result.address,
+              publicKey: (response.result as any).publicKey || '',
+              network: 'testnet'
+            };
+          } else {
+            throw new Error('Connexion GemWallet annulée ou échouée');
+          }
+          break;
+          
+        case 'crossmark':
+          console.log(`� Connexion Crossmark...`);
+          if (typeof window !== 'undefined' && (window as any).xrpl) {
+            const crossmark = (window as any).xrpl;
+            const result = await crossmark.signInAndWait();
+            if (result?.response?.data?.address) {
+              account = {
+                address: result.response.data.address,
+                publicKey: result.response.data.publicKey,
+                network: 'testnet'
+              };
+            } else {
+              throw new Error('Connexion Crossmark annulée');
+            }
+          } else {
+            throw new Error('Crossmark n\'est pas installé. Installez l\'extension depuis https://crossmark.io/');
+          }
+          break;
+          
+        case 'xaman':
+        case 'walletconnect':
+          throw new Error(`${walletId} nécessite une configuration API. Vérifiez votre .env.local`);
+          
+        default:
+          throw new Error(`Wallet ${walletId} non supporté`);
       }
 
-      console.log(`✅ Adapter trouvé:`, adapter.name || adapter.id);
-
-      // Vérifier la disponibilité
-      const isAvailable = typeof adapter.isAvailable === 'function' 
-        ? await adapter.isAvailable() 
-        : true;
-
-      if (!isAvailable) {
-        throw new Error(`${adapter.name || walletId} n'est pas disponible. Vérifiez l'extension ou l'API key.`);
-      }
-
-      // Connecter via l'adapter
-      console.log(`🔄 Connexion en cours...`);
-      const account = await adapter.connect();
       console.log(`🎉 Compte reçu:`, account);
 
       // Mettre à jour le state directement
@@ -138,7 +163,7 @@ export function WalletButton() {
       setShowWalletModal(false);
       toast({
         title: "Wallet connecté",
-        description: `Connecté avec ${adapter.name || walletId}`,
+        description: `Connecté avec ${walletId}`,
       });
     } catch (error) {
       console.error('❌ Erreur de connexion:', error);

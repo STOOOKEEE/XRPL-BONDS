@@ -8,7 +8,7 @@ import { TokenDrawer } from "@/components/marketplace"
 import { BuyOfferModal } from "@/components/marketplace"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useWalletStore } from "@/lib/store"
+import { useWallet } from "@/context/WalletContext"
 import { MOCK_OFFERS } from "@/lib/bonds"
 import type { Offer, OfferToken } from "@/lib/bonds"
 import { Plus } from "lucide-react"
@@ -18,7 +18,7 @@ import { motion, AnimatePresence } from "framer-motion"
 type MarketplaceSortOption = "newest" | "highest-value" | "soonest-expiry"
 
 export default function MarketplacePage() {
-  const { isConnected } = useWalletStore()
+  const { isConnected } = useWallet()
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null)
   const [selectedToken, setSelectedToken] = useState<OfferToken | null>(null)
   const [isTokenDrawerOpen, setIsTokenDrawerOpen] = useState(false)

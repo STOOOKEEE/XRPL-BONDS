@@ -6,18 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Header } from "@/components/header"
 import { Leaderboard } from "@/components/leaderboard"
 import { BondDetailModal } from "@/components/bonds"
-import { useWalletStore } from "@/lib/store"
-import { connectGemWallet } from "@/lib/wallet"
+import { useWallet } from "@/context/WalletContext"
 import { MOCK_BONDS } from "@/lib/bonds"
-import { useToast } from "@/hooks/use-toast"
 import type { Bond } from "@/lib/bonds"
 import Link from "next/link"
 import { TrendingUp, Shield, Globe } from "lucide-react"
 
 export default function HomePage() {
-  const { isConnected, setWallet } = useWalletStore()
-  const { toast } = useToast()
-  const [isConnecting, setIsConnecting] = useState(false)
+  const { isConnected } = useWallet()
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [selectedBond, setSelectedBond] = useState<Bond | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -42,27 +38,7 @@ export default function HomePage() {
     return () => observer.disconnect()
   }, [])
 
-  const handleConnect = async () => {
-    setIsConnecting(true)
-    try {
-      const address = await connectGemWallet()
-      setWallet(address)
-      toast({
-        title: "Wallet connected",
-        description: "Ready to invest in tokenized bonds",
-      })
-    } catch (error) {
-      if (error instanceof Error) {
-        toast({
-          title: "Connection failed",
-          description: error.message,
-          variant: "destructive",
-        })
-      }
-    } finally {
-      setIsConnecting(false)
-    }
-  }
+
 
   const handleBondClick = (bond: Bond) => {
     setSelectedBond(bond)
@@ -90,11 +66,7 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              {!isConnected ? (
-                <Button size="lg" onClick={handleConnect} disabled={isConnecting}>
-                  {isConnecting ? "Connecting..." : "Connect Wallet"}
-                </Button>
-              ) : (
+              {isConnected ? (
                 <>
                   <Button size="lg" asChild>
                     <Link href="/invest">Invest</Link>
@@ -103,9 +75,10 @@ export default function HomePage() {
                     <Link href="/marketplace">Go to Marketplace</Link>
                   </Button>
                 </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Connect your wallet to get started</p>
               )}
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}

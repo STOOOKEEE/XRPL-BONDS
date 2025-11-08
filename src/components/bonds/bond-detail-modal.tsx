@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { formatCurrency, formatPercentage, getBondProgress } from "@/lib/bonds"
 import { format } from "date-fns"
 import { Calendar, TrendingUp, Shield, Building2, CreditCard } from "lucide-react"
-import { useWalletStore } from "@/lib/store"
+import { useWallet } from "@/context/WalletContext"
 import { InvestModal } from "./invest-modal"
 import { useState } from "react"
 
@@ -19,7 +19,7 @@ type BondDetailModalProps = {
 }
 
 export function BondDetailModal({ bond, isOpen, onClose }: BondDetailModalProps) {
-  const { isConnected } = useWalletStore()
+  const { isConnected } = useWallet()
   const [isInvestModalOpen, setIsInvestModalOpen] = useState(false)
 
   if (!bond) return null

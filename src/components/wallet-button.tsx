@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Wallet, Copy, LogOut } from "lucide-react"
 import { formatAddress } from "@/lib/wallet"
 import { createWalletManager } from "@/lib/wallet-manager"
+import { ENV } from "@/config/env"
 
 interface WalletOption {
   id: string;
@@ -121,27 +122,126 @@ export function WalletButton() {
           break;
           
         case 'crossmark':
-          console.log(`� Connexion Crossmark...`);
-          if (typeof window !== 'undefined' && (window as any).xrpl) {
-            const crossmark = (window as any).xrpl;
-            const result = await crossmark.signInAndWait();
-            if (result?.response?.data?.address) {
+          console.log(`🔄 Connexion Crossmark...`);
+          
+          // Crossmark injecte window.crossmark dans la page
+          if (typeof window === 'undefined') {
+            throw new Error('Window non disponible');
+          }
+
+          console.log('🔍 Vérification de Crossmark...');
+          console.log('window.crossmark:', typeof (window as any).crossmark);
+          console.log('window.crossmarkSdk:', typeof (window as any).crossmarkSdk);
+          
+          // Vérifier si Crossmark est installé
+          const crossmarkApi = (window as any).crossmark || (window as any).crossmarkSdk;
+          
+          if (!crossmarkApi) {
+            throw new Error('Crossmark n\'est pas installé. Installez l\'extension depuis https://crossmark.io/');
+          }
+
+          console.log('✅ Crossmark détecté');
+          console.log('📋 Méthodes disponibles:', Object.keys(crossmarkApi));
+
+          // Connexion avec Crossmark - essayer différentes méthodes
+          try {
+            let result;
+            
+            // Crossmark utilise methods.signInAndWait() ou sync.signInAndWait()
+            if (crossmarkApi.methods && typeof crossmarkApi.methods.signInAndWait === 'function') {
+              console.log('🔄 Utilisation de methods.signInAndWait()');
+              result = await crossmarkApi.methods.signInAndWait();
+            }
+            else if (crossmarkApi.sync && typeof crossmarkApi.sync.signInAndWait === 'function') {
+              console.log('🔄 Utilisation de sync.signInAndWait()');
+              result = await crossmarkApi.sync.signInAndWait();
+            }
+            else if (crossmarkApi.async && typeof crossmarkApi.async.signInAndWait === 'function') {
+              console.log('🔄 Utilisation de async.signInAndWait()');
+              result = await crossmarkApi.async.signInAndWait();
+            }
+            // Fallback
+            else if (typeof crossmarkApi.signInAndWait === 'function') {
+              console.log('🔄 Utilisation de signInAndWait()');
+              result = await crossmarkApi.signInAndWait();
+            }
+            else {
+              console.error('Structure Crossmark:', {
+                methods: crossmarkApi.methods ? Object.keys(crossmarkApi.methods) : 'undefined',
+                sync: crossmarkApi.sync ? Object.keys(crossmarkApi.sync) : 'undefined',
+                async: crossmarkApi.async ? Object.keys(crossmarkApi.async) : 'undefined'
+              });
+              throw new Error('Aucune méthode de connexion trouvée dans l\'API Crossmark');
+            }
+            
+            console.log('📦 Résultat Crossmark:', result);
+            
+            // Crossmark peut retourner différents formats
+            const address = result?.address || result?.response?.data?.address || result?.data?.address;
+            const publicKey = result?.publicKey || result?.response?.data?.publicKey || result?.data?.publicKey;
+            
+            if (address) {
               account = {
-                address: result.response.data.address,
-                publicKey: result.response.data.publicKey,
+                address: address,
+                publicKey: publicKey || '',
                 network: 'testnet'
               };
             } else {
-              throw new Error('Connexion Crossmark annulée');
+              throw new Error('Connexion Crossmark annulée ou aucune adresse reçue');
             }
-          } else {
-            throw new Error('Crossmark n\'est pas installé. Installez l\'extension depuis https://crossmark.io/');
+          } catch (error) {
+            console.error('❌ Erreur Crossmark:', error);
+            throw new Error(error instanceof Error ? error.message : 'Erreur de connexion Crossmark');
           }
           break;
           
         case 'xaman':
+          console.log(`🔄 Connexion Xaman...`);
+          // Vérifier que la clé API est configurée
+          const xamanApiKey = ENV.XAMAN_API_KEY;
+          if (!xamanApiKey || xamanApiKey === 'your-xaman-api-key-here') {
+            throw new Error('Xaman API Key non configurée. Ajoutez NEXT_PUBLIC_XAMAN_API_KEY dans votre .env.local');
+          }
+          
+          console.log('🔑 Xaman API Key trouvée:', xamanApiKey.substring(0, 8) + '...');
+          
+          toast({
+            title: "Connexion Xaman",
+            description: "Création du payload de connexion...",
+          });
+
+          // Importer les utilitaires Xaman
+          const { createXamanSignInPayload } = await import('@/lib/xaman');
+          
+          // Créer le payload
+          const returnUrl = `${window.location.origin}/xaman-callback`;
+          console.log('🔗 Return URL:', returnUrl);
+          
+          const payloadData = await createXamanSignInPayload(xamanApiKey, returnUrl);
+          
+          console.log('Payload Xaman créé:', payloadData);
+          
+          // Sauvegarder le payload ID dans le localStorage
+          localStorage.setItem('xaman_payload_id', payloadData.uuid);
+          
+          toast({
+            title: "Redirection vers Xaman",
+            description: "Veuillez approuver la connexion dans l'application Xaman",
+          });
+          
+          // Attendre un peu avant de rediriger
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Rediriger vers Xaman (mobile ou desktop)
+          window.location.href = payloadData.next.always;
+          
+          // Ne pas continuer l'exécution car on redirige
+          return;
+          
         case 'walletconnect':
-          throw new Error(`${walletId} nécessite une configuration API. Vérifiez votre .env.local`);
+          console.log(`🔄 Connexion WalletConnect...`);
+          // WalletConnect nécessite une implémentation complexe avec QR code
+          throw new Error('WalletConnect sera disponible prochainement. Utilisez GemWallet, Crossmark ou Xaman pour le moment.');
           
         default:
           throw new Error(`Wallet ${walletId} non supporté`);

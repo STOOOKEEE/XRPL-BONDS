@@ -13,7 +13,7 @@ interface WalletContextType {
   setWalletManager: (manager: WalletManager) => void;
   setIsConnected: (connected: boolean) => void;
   setAccountInfo: (info: AccountInfo | null) => void;
-  addEvent: (name: string, data: any) => void;
+  addEvent: (event: Event) => void;
   clearEvents: () => void;
   showStatus: (message: string, type: StatusMessage['type']) => void;
 }
@@ -31,9 +31,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setWalletManagerState(manager);
   }, []);
 
-  const addEvent = useCallback((name: string, data: any) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setEvents((prev) => [{ timestamp, name, data }, ...prev]);
+  const addEvent = useCallback((event: Event) => {
+    setEvents((prev) => [event, ...prev]);
   }, []);
 
   const clearEvents = useCallback(() => {

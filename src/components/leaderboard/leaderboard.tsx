@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import type { Bond, SortOption, FilterOptions } from "@/lib/bonds"
 import { BondCard } from "@/components/bonds"
 import { LeaderboardControls } from "@/components/leaderboard"
@@ -15,6 +15,11 @@ type LeaderboardProps = {
 export function Leaderboard({ bonds, viewOnly = false, onBondClick, showInvestButton = true }: LeaderboardProps) {
   const [sortBy, setSortBy] = useState<SortOption>("size-desc")
   const [filters, setFilters] = useState<FilterOptions>({})
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const filteredAndSortedBonds = useMemo(() => {
     let result = [...bonds]
@@ -61,6 +66,20 @@ export function Leaderboard({ bonds, viewOnly = false, onBondClick, showInvestBu
 
     return result
   }, [bonds, filters, sortBy])
+
+  // Éviter les problèmes d'hydratation avec les Select components
+  if (!isMounted) {
+    return (
+      <div className="space-y-6">
+        <div className="h-20 animate-pulse bg-muted rounded-lg" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {bonds.slice(0, 6).map((bond) => (
+            <div key={bond.id} className="h-64 animate-pulse bg-muted rounded-lg" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

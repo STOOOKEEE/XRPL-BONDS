@@ -18,12 +18,102 @@ import { motion, AnimatePresence } from "framer-motion"
 
 type BondFormat = "CLASSIC" | "ZERO_COUPON"
 type Currency = "XRP" | "USDC"
-type CouponFrequency = "ANNUAL" | "SEMIANNUAL" | "QUARTERLY"
 
 export default function CorpoPage() {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+
+  // Helper functions for date calculations
+  const getDefaultStartDate = () => {
+    const date = new Date()
+    date.setDate(date.getDate() + 7)
+    return date.toISOString().split('T')[0]
+  }
+
+  const getDefaultEndDate = () => {
+    const date = new Date()
+    date.setDate(date.getDate() + 7)
+    date.setFullYear(date.getFullYear() + 1)
+    return date.toISOString().split('T')[0]
+  }
+
+  const addMonths = (dateStr: string, months: number): string => {
+    const date = new Date(dateStr)
+    const targetMonth = date.getMonth() + months
+    const targetYear = date.getFullYear() + Math.floor(targetMonth / 12)
+    const finalMonth = targetMonth % 12
+    
+    date.setFullYear(targetYear)
+    date.setMonth(finalMonth)
+    
+    // Handle edge cases for days that don't exist in the target month
+    const lastDayOfMonth = new Date(targetYear, finalMonth + 1, 0).getDate()
+    if (date.getDate() > lastDayOfMonth) {
+      date.setDate(lastDayOfMonth)
+    }
+    
+    return date.toISOString().split('T')[0]
+  }
+
+  const getMonthsDifference = (startStr: string, endStr: string): number => {
+    const start = new Date(startStr)
+    const end = new Date(endStr)
+    
+    const yearsDiff = end.getFullYear() - start.getFullYear()
+    const monthsDiff = end.getMonth() - start.getMonth()
+    const daysDiff = end.getDate() - start.getDate()
+    
+    let totalMonths = yearsDiff * 12 + monthsDiff
+    
+    // If end day is before start day, we subtract a month (rounding down)
+    if (daysDiff < 0) {
+      totalMonths--
+    }
+    
+    return Math.max(1, totalMonths) // Minimum 1 month
+  }
+
+  const getDivisors = (n: number): number[] => {
+    const divisors: number[] = []
+    for (let i = 1; i <= n; i++) {
+      if (n % i === 0) {
+        divisors.push(i)
+      }
+    }
+    return divisors
+  }
+
+  const getAvailableFrequencies = (durationMonths: number): Array<{value: number, label: string}> => {
+    const divisors = getDivisors(durationMonths)
+    return divisors.map(months => ({
+      value: months,
+      label: months === 1 ? "Monthly (1 month)" :
+             months === 3 ? "Quarterly (3 months)" :
+             months === 6 ? "Semiannual (6 months)" :
+             months === 12 ? "Annual (12 months)" :
+             `Every ${months} months`
+    }))
+  }
+
+  const getFundingPeriodDays = (): number => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const start = new Date(startDate)
+    start.setHours(0, 0, 0, 0)
+    const diffTime = start.getTime() - today.getTime()
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  }
+
+  const getFundingPeriodText = (): string => {
+    const days = getFundingPeriodDays()
+    if (days === 0) return "today"
+    if (days === 1) return "1 day"
+    if (days === 7) return "1 week"
+    if (days === 14) return "2 weeks"
+    if (days % 7 === 0) return `${days / 7} weeks`
+    return `${days} days`
+  }
 
   // Form state
   const [companyName, setCompanyName] = useState("")
@@ -31,16 +121,71 @@ export default function CorpoPage() {
   const [principalTarget, setPrincipalTarget] = useState("")
   const [format, setFormat] = useState<BondFormat>("CLASSIC")
   const [currency] = useState<Currency>("USDC")
-  const [maturityDate, setMaturityDate] = useState("")
+  const [startDate, setStartDate] = useState(getDefaultStartDate())
+  const [endDate, setEndDate] = useState(getDefaultEndDate())
+  const [durationMonths, setDurationMonths] = useState(12)
+  const [lastModified, setLastModified] = useState<'start' | 'end' | 'duration'>('duration')
   const [totalRepayment, setTotalRepayment] = useState("")
   const [couponRate, setCouponRate] = useState("")
-  const [couponFrequency, setCouponFrequency] = useState<CouponFrequency>("ANNUAL")
+  const [couponFrequencyMonths, setCouponFrequencyMonths] = useState(12)
   const [bondSymbol, setBondSymbol] = useState("")
   const [minTicket, setMinTicket] = useState("")
   const [hardCap, setHardCap] = useState("")
   const [kycRequired, setKycRequired] = useState(false)
   const [termsUrl, setTermsUrl] = useState("")
   const [disclosureAccepted, setDisclosureAccepted] = useState(false)
+
+  // Update the third parameter when two are modified
+  const handleStartDateChange = (newStart: string) => {
+    setStartDate(newStart)
+    setLastModified('start')
+    
+    if (lastModified === 'end' || lastModified === 'start') {
+      // Calculate duration from start and end
+      const months = getMonthsDifference(newStart, endDate)
+      setDurationMonths(months)
+      updateCouponFrequency(months)
+    } else {
+      // Calculate end from start and duration
+      const newEnd = addMonths(newStart, durationMonths)
+      setEndDate(newEnd)
+    }
+  }
+
+  const handleEndDateChange = (newEnd: string) => {
+    setEndDate(newEnd)
+    setLastModified('end')
+    
+    if (lastModified === 'start' || lastModified === 'end') {
+      // Calculate duration from start and end
+      const months = getMonthsDifference(startDate, newEnd)
+      setDurationMonths(months)
+      updateCouponFrequency(months)
+    } else {
+      // Calculate start from end and duration
+      const newStart = addMonths(newEnd, -durationMonths)
+      setStartDate(newStart)
+    }
+  }
+
+  const handleDurationChange = (newDuration: number) => {
+    if (newDuration < 1) return
+    setDurationMonths(newDuration)
+    setLastModified('duration')
+    updateCouponFrequency(newDuration)
+    
+    // When duration changes, always adjust the end date (keep start fixed)
+    const newEnd = addMonths(startDate, newDuration)
+    setEndDate(newEnd)
+  }
+
+  const updateCouponFrequency = (months: number) => {
+    const available = getAvailableFrequencies(months)
+    const isCurrentValid = available.some(f => f.value === couponFrequencyMonths)
+    if (available.length > 0 && !isCurrentValid) {
+      setCouponFrequencyMonths(available[0].value)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,7 +202,7 @@ export default function CorpoPage() {
 
     const principal = Number.parseFloat(principalTarget)
     const repayment = Number.parseFloat(totalRepayment)
-    const maturityISO = `${maturityDate}T00:00:00.000Z`
+    const endDateISO = `${endDate}T00:00:00.000Z`
 
     if (isNaN(principal) || principal <= 0) {
       toast({
@@ -68,16 +213,46 @@ export default function CorpoPage() {
       return
     }
 
-    if (new Date(maturityISO) <= new Date()) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (new Date(startDate) < today) {
       toast({
-        title: "Invalid maturity date",
-        description: "Maturity date must be in the future",
+        title: "Invalid start date",
+        description: "Start date cannot be in the past",
         variant: "destructive",
       })
       return
     }
 
-    if (!validateTotalRepayment(principal, repayment, maturityISO)) {
+    if (new Date(endDate) <= today) {
+      toast({
+        title: "Invalid end date",
+        description: "Bond end date must be in the future",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (new Date(startDate) >= new Date(endDate)) {
+      toast({
+        title: "Invalid dates",
+        description: "Start date must be before end date",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (durationMonths < 1) {
+      toast({
+        title: "Invalid duration",
+        description: "Bond duration must be at least 1 month",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!validateTotalRepayment(principal, repayment, endDateISO)) {
       toast({
         title: "Invalid total repayment",
         description: "Total repayment must be at least the discounted principal target",
@@ -121,10 +296,13 @@ export default function CorpoPage() {
     setContactEmail("")
     setPrincipalTarget("")
     setFormat("CLASSIC")
-    setMaturityDate("")
+    setStartDate(getDefaultStartDate())
+    setEndDate(getDefaultEndDate())
+    setDurationMonths(12)
+    setLastModified('duration')
     setTotalRepayment("")
     setCouponRate("")
-    setCouponFrequency("ANNUAL")
+    setCouponFrequencyMonths(12)
     setBondSymbol("")
     setMinTicket("")
     setHardCap("")
@@ -217,7 +395,7 @@ export default function CorpoPage() {
                         <div className="space-y-2">
                           <Label htmlFor="currency">Currency to Raise *</Label>
                           <div className="flex items-center h-10 px-3 py-2 rounded-md border border-input bg-muted text-sm">
-                            <span className="font-medium">USDC (stablecoin)</span>
+                            <span className="font-medium">USDC</span>
                           </div>
                         </div>
                       </div>
@@ -236,15 +414,77 @@ export default function CorpoPage() {
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="maturity-date">Maturity Date *</Label>
-                        <Input
-                          id="maturity-date"
-                          type="date"
-                          value={maturityDate}
-                          onChange={(e) => setMaturityDate(e.target.value)}
-                          required
-                        />
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Label>Bond Timeline *</Label>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs text-sm">
+                                  Fill in any 2 of the 3 fields. The third will be calculated automatically.
+                                  Duration must be in whole months.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+
+                        <div className="grid md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="start-date">Start Date (earliest) *</Label>
+                            <Input
+                              id="start-date"
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => handleStartDateChange(e.target.value)}
+                              min={new Date().toISOString().split('T')[0]}
+                              required
+                              className={lastModified === 'start' ? 'ring-2 ring-primary' : ''}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="end-date">End Date (latest) *</Label>
+                            <Input
+                              id="end-date"
+                              type="date"
+                              value={endDate}
+                              onChange={(e) => handleEndDateChange(e.target.value)}
+                              min={new Date().toISOString().split('T')[0]}
+                              required
+                              className={lastModified === 'end' ? 'ring-2 ring-primary' : ''}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="duration">Duration (months) *</Label>
+                            <Input
+                              id="duration"
+                              type="number"
+                              value={durationMonths}
+                              onChange={(e) => handleDurationChange(Number.parseInt(e.target.value) || 1)}
+                              min="1"
+                              step="1"
+                              required
+                              className={lastModified === 'duration' ? 'ring-2 ring-primary' : ''}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+                          <p>
+                            <strong>Funding Period:</strong> The bond must be fully funded within {getFundingPeriodText()} ({getFundingPeriodDays()} day{getFundingPeriodDays() !== 1 ? 's' : ''} from today)
+                          </p>
+                          <p className="mt-1">
+                            <strong>Bond Period:</strong> {new Date(startDate).toLocaleDateString('fr-FR')} → {new Date(endDate).toLocaleDateString('fr-FR')}
+                          </p>
+                          <p className="mt-1">
+                            <strong>Duration:</strong> {durationMonths} months ({Math.floor(durationMonths / 12)} year{Math.floor(durationMonths / 12) !== 1 ? 's' : ''}{durationMonths % 12 > 0 ? ` and ${durationMonths % 12} month${durationMonths % 12 !== 1 ? 's' : ''}` : ''})
+                          </p>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -295,20 +535,41 @@ export default function CorpoPage() {
                             </div>
 
                             <div className="space-y-2">
-                              <Label htmlFor="coupon-frequency">Coupon Frequency *</Label>
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor="coupon-frequency">Coupon Frequency *</Label>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="max-w-xs text-sm">
+                                        Available frequencies adapt to the bond duration to ensure regular payments.
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                               <Select
-                                value={couponFrequency}
-                                onValueChange={(value) => setCouponFrequency(value as CouponFrequency)}
+                                value={couponFrequencyMonths.toString()}
+                                onValueChange={(value) => setCouponFrequencyMonths(Number.parseInt(value))}
                               >
                                 <SelectTrigger id="coupon-frequency">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="ANNUAL">Annual</SelectItem>
-                                  <SelectItem value="SEMIANNUAL">Semiannual</SelectItem>
-                                  <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                                  {getAvailableFrequencies(durationMonths).map((freq) => (
+                                    <SelectItem key={freq.value} value={freq.value.toString()}>
+                                      {freq.label}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
+                              {getAvailableFrequencies(durationMonths).length === 0 && (
+                                <p className="text-xs text-amber-600">
+                                  ⚠️ Duration too short for coupon payments. Consider using zero-coupon format.
+                                </p>
+                              )}
                             </div>
                           </div>
                         </>
@@ -357,17 +618,6 @@ export default function CorpoPage() {
                             step="0.01"
                           />
                         </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="kyc-required"
-                          checked={kycRequired}
-                          onCheckedChange={(checked) => setKycRequired(checked as boolean)}
-                        />
-                        <Label htmlFor="kyc-required" className="cursor-pointer">
-                          KYC Required for Investors
-                        </Label>
                       </div>
 
                       <div className="space-y-2">

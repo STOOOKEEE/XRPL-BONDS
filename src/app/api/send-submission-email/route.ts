@@ -124,13 +124,16 @@ export async function POST(request: Request) {
     `.trim()
 
     // Send email using Resend
-    console.log('📧 Sending email to:', contactEmail)
-    
+    // In test mode, Resend only allows sending to the verified email address
     const fromEmail = process.env.FROM_EMAIL || 'onboarding@resend.dev'
+    const testModeEmail = 'sofiane.ben_taleb@edu.devinci.fr' // Your verified email
+    const toEmail = process.env.NODE_ENV === 'production' ? contactEmail : testModeEmail
+    
+    console.log('📧 Sending email to:', toEmail, process.env.NODE_ENV === 'production' ? '(production)' : '(test mode - using verified email)')
     
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: fromEmail,
-      to: contactEmail,
+      to: toEmail,
       subject: `Bond Submission Confirmation - ${bondSymbol}`,
       html: emailContent,
     })

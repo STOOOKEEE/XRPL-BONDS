@@ -442,47 +442,68 @@ export default function CorpoPage() {
       
       // Send to backend API
       try {
-        const backendResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/bonds/submit`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.NEXT_PUBLIC_API_KEY || ''
-          },
-          body: JSON.stringify({
-            issuerName: companyName,
-            contactEmail: contactEmail,
-            couponFrequency: couponFrequencyMonths,
-            totalSupply: principalTarget,
-            issuerAddress: issuerAddress,
-            issueDate: startDate,
-            maturityDate: endDate,
-            durationYears: durationYears,
-            couponRate: couponRate,
-            bondId: bondSymbol,
-            tokenName: tokenName,
-            tokenCurrency: tokenId,
-            minimumTicket: minTicket || "0",
-            walletType: walletType,
-            bondFormat: format,
-            currency: currency,
-            totalRepayment: getCalculatedTotalRepayment(),
-            kycRequired: kycRequired
-          })
-        })
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL
+        const apiKey = process.env.NEXT_PUBLIC_API_KEY
         
-        const backendResult = await backendResponse.json()
-        if (backendResult.ok) {
-          console.log('✅ Bond créé dans MongoDB:', backendResult.bond)
+        if (!apiUrl || !apiKey) {
+          console.warn('⚠️ Backend API non configuré (variables d\'environnement manquantes)')
         } else {
-          console.error('❌ Erreur backend:', backendResult)
+          console.log('🔄 Envoi au backend:', `${apiUrl}/v1/bonds/submit`)
+          
+          const backendResponse = await fetch(`${apiUrl}/v1/bonds/submit`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey
+            },
+            body: JSON.stringify({
+              issuerName: companyName,
+              contactEmail: contactEmail,
+              couponFrequency: couponFrequencyMonths,
+              totalSupply: principalTarget,
+              issuerAddress: issuerAddress,
+              issueDate: startDate,
+              maturityDate: endDate,
+              durationYears: durationYears,
+              couponRate: Number.parseFloat(couponRate) / 100, // Convert percentage to decimal (6.96% -> 0.0696)
+              bondId: bondSymbol,
+              tokenName: tokenName,
+              tokenCurrency: tokenId,
+              minimumTicket: minTicket || "0",
+              walletType: walletType,
+              bondFormat: format,
+              currency: currency,
+              totalRepayment: getCalculatedTotalRepayment(),
+              kycRequired: kycRequired
+            })
+          })
+          
+          console.log('📡 Réponse backend status:', backendResponse.status)
+          
+          if (!backendResponse.ok) {
+            const errorText = await backendResponse.text()
+            console.error('❌ Erreur HTTP backend:', backendResponse.status, errorText)
+          } else {
+            const backendResult = await backendResponse.json()
+            console.log('📦 Réponse backend:', backendResult)
+            
+            if (backendResult.ok) {
+              console.log('✅ Bond créé dans MongoDB:', backendResult.bond)
+            } else {
+              console.error('❌ Backend a retourné ok:false:', backendResult)
+            }
+          }
         }
       } catch (backendError) {
         console.error('❌ Erreur appel backend:', backendError)
+        console.error('Stack:', backendError instanceof Error ? backendError.stack : 'N/A')
         // Continue even if backend fails
       }
       
       // Send confirmation email
       try {
+        console.log('📧 Envoi de l\'email de confirmation à:', contactEmail)
+        
         const emailResponse = await fetch('/api/send-submission-email', {
           method: 'POST',
           headers: {
@@ -510,11 +531,18 @@ export default function CorpoPage() {
           }),
         })
         
+        console.log('📬 Réponse email status:', emailResponse.status)
+        
         if (!emailResponse.ok) {
-          console.error('Failed to send confirmation email')
+          const errorText = await emailResponse.text()
+          console.error('❌ Erreur HTTP email:', emailResponse.status, errorText)
+        } else {
+          const emailResult = await emailResponse.json()
+          console.log('✅ Email envoyé:', emailResult)
         }
       } catch (emailError) {
-        console.error('Error sending email:', emailError)
+        console.error('❌ Erreur appel email:', emailError)
+        console.error('Stack:', emailError instanceof Error ? emailError.stack : 'N/A')
         // Continue even if email fails
       }
       

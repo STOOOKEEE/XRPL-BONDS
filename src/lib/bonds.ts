@@ -85,7 +85,7 @@ export function validateTotalRepayment(
   return totalRepayment >= discountedPrincipal
 }
 
-export function formatCurrency(amount: number, currency: "XRP" | "USD"): string {
+export function formatCurrency(amount: number, currency: "XRP" | "USD" | "RLUSD"): string {
   if (currency === "USD") {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -93,6 +93,9 @@ export function formatCurrency(amount: number, currency: "XRP" | "USD"): string 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount)
+  }
+  if (currency === "RLUSD") {
+    return `${amount.toLocaleString("en-US")} RLUSD`
   }
   return `${amount.toLocaleString("en-US")} XRP`
 }

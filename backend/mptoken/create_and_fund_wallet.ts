@@ -15,7 +15,27 @@ async function createAndFund() {
   try {
     await client.connect();
     // fundWallet is a devnet helper that returns a funded wallet
-    const funded = await client.fundWallet();
+    // If XRPL_FAUCET_URL is set in .env (e.g. https://wasmfaucet.devnet.rippletest.net/accounts),
+    // parse it and pass faucetHost/faucetPath to fundWallet so xrpl.js can call the correct faucet.
+    let faucetOptions: any = {}
+    if (process.env.XRPL_FAUCET_URL) {
+      try {
+        const u = new URL(process.env.XRPL_FAUCET_URL);
+        // URL.host gives hostname:port if any; fundWallet expects hostname only (works with host including port)
+        faucetOptions.faucetHost = u.host;
+        faucetOptions.faucetPath = u.pathname || '/accounts';
+      } catch (err) {
+        // Ignore parse error and fall back to known faucet
+        console.warn('Invalid XRPL_FAUCET_URL, falling back to default faucet:', process.env.XRPL_FAUCET_URL);
+      }
+    }
+
+    if (!faucetOptions.faucetHost) {
+      // default to public altnet faucet if none provided
+      faucetOptions = { faucetHost: 'faucet.altnet.rippletest.net', faucetPath: '/accounts' };
+    }
+
+    const funded = await client.fundWallet(undefined, faucetOptions);
     const wallet = (funded as any).wallet;
 
     // Wallet shape can vary across xrpl.js versions; extract common fields defensively

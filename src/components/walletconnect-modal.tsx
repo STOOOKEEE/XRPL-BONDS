@@ -30,7 +30,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
         setError('')
         
         // Importer SignClient
-        const { SignClient } = await import('@walletconnect/sign-client')
+        const { SignClient } = require('@walletconnect/sign-client')
         
         console.log('🔧 Création du SignClient...')
         console.log('📋 Project ID:', projectId)

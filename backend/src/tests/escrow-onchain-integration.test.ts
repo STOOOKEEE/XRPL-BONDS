@@ -142,11 +142,16 @@ async function runOnChainIntegrationTest() {
     console.log('─'.repeat(80));
 
     const treasury = await createAndFundWallet(client, 'Treasury (trésor de la campagne)');
+    await sleep(3000); // Attendre validation ledger
+    
     const investor1 = await createAndFundWallet(client, 'Investor 1');
+    await sleep(3000); // Attendre validation ledger
+    
     const investor2 = await createAndFundWallet(client, 'Investor 2');
+    await sleep(3000); // Attendre validation ledger
+    
     const investor3 = await createAndFundWallet(client, 'Investor 3');
-
-    await sleep(2000); // Attendre que les wallets soient bien indexés
+    await sleep(3000); // Attendre validation ledger
 
     // Vérifier les balances initiales
     console.log('\n💰 Balances initiales:');

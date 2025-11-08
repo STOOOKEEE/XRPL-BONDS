@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { motion, AnimatePresence } from "framer-motion"
 
 type BondFormat = "CLASSIC" | "ZERO_COUPON"
-type Currency = "XRP" | "USDC"
+type Currency = "XRP" | "RLUSD"
 
 export default function CorpoPage() {
   const { toast } = useToast()
@@ -58,6 +58,21 @@ export default function CorpoPage() {
     const timestamp = Date.now()
     const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
     return `BOND-${timestamp}-${random}`
+  }
+
+  // Generate a unique token name (3 uppercase letters + 3 digits)
+  const generateTokenName = (): string => {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    const randomLetters = Array.from({ length: 3 }, () => letters[Math.floor(Math.random() * letters.length)]).join('')
+    const randomDigits = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
+    return `${randomLetters}${randomDigits}`
+  }
+
+  // Generate a unique token ID (hexadecimal format)
+  const generateTokenId = (): string => {
+    const timestamp = Date.now().toString(16).toUpperCase()
+    const random = Math.floor(Math.random() * 0xFFFFFFFF).toString(16).toUpperCase().padStart(8, '0')
+    return `${timestamp}${random}`
   }
 
   const addMonths = (dateStr: string, months: number): string => {
@@ -118,9 +133,11 @@ export default function CorpoPage() {
   // Form state
   const [companyName, setCompanyName] = useState("")
   const [contactEmail, setContactEmail] = useState("")
+  const [issuerAddress, setIssuerAddress] = useState("")
+  const [walletType, setWalletType] = useState<"GemWallet" | "Crossmark" | "Xaman">("Xaman")
   const [principalTarget, setPrincipalTarget] = useState("")
   const [format, setFormat] = useState<BondFormat>("CLASSIC")
-  const [currency] = useState<Currency>("USDC")
+  const [currency] = useState<Currency>("RLUSD")
   const [startDate, setStartDate] = useState(getDefaultStartDate())
   const [endDate, setEndDate] = useState(getDefaultEndDate())
   const [durationYears, setDurationYears] = useState(1)
@@ -157,8 +174,9 @@ export default function CorpoPage() {
     return totalRepayment
   }
   const [bondSymbol] = useState(() => generateBondCode())
+  const [tokenName] = useState(() => generateTokenName())
+  const [tokenId] = useState(() => generateTokenId())
   const [minTicket, setMinTicket] = useState("")
-  const [hardCap, setHardCap] = useState("")
   const [kycRequired, setKycRequired] = useState(false)
   const [disclosureAccepted, setDisclosureAccepted] = useState(false)
 
@@ -299,6 +317,16 @@ export default function CorpoPage() {
     }
   }, [startDate, endDate, durationYears])
 
+  // Set coupon frequency to 0 (None) when format is Zero-Coupon
+  useEffect(() => {
+    if (format === "ZERO_COUPON") {
+      setCouponFrequencyMonths(0)
+    } else if (format === "CLASSIC" && couponFrequencyMonths === 0) {
+      // Reset to default annual if switching back to classic
+      setCouponFrequencyMonths(12)
+    }
+  }, [format, couponFrequencyMonths])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -307,6 +335,16 @@ export default function CorpoPage() {
       toast({
         title: "Disclosure required",
         description: "Please accept the disclosure to continue",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate XRPL address format
+    if (!issuerAddress || !issuerAddress.match(/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/)) {
+      toast({
+        title: "Invalid XRPL address",
+        description: "Please enter a valid XRPL address (starts with 'r' and 25-35 characters)",
         variant: "destructive",
       })
       return
@@ -412,7 +450,11 @@ export default function CorpoPage() {
           body: JSON.stringify({
             companyName,
             contactEmail,
+            issuerAddress,
+            walletType,
             bondSymbol,
+            tokenName,
+            tokenId,
             principalTarget,
             currency,
             format,
@@ -423,7 +465,6 @@ export default function CorpoPage() {
             couponFrequencyMonths,
             totalRepayment: getCalculatedTotalRepayment(),
             minTicket,
-            hardCap,
             kycRequired,
           }),
         })
@@ -455,6 +496,8 @@ export default function CorpoPage() {
   const resetForm = () => {
     setCompanyName("")
     setContactEmail("")
+    setIssuerAddress("")
+    setWalletType("Xaman")
     setPrincipalTarget("")
     setFormat("CLASSIC")
     setStartDate(getDefaultStartDate())
@@ -465,7 +508,6 @@ export default function CorpoPage() {
     setCouponRate("5.5")
     setCouponFrequencyMonths(12)
     setMinTicket("")
-    setHardCap("")
     setKycRequired(false)
     setDisclosureAccepted(false)
     setShowSuccess(false)
@@ -531,6 +573,35 @@ export default function CorpoPage() {
                           required
                         />
                       </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="wallet-type">Wallet Type *</Label>
+                        <Select value={walletType} onValueChange={(value) => setWalletType(value as "GemWallet" | "Crossmark" | "Xaman")}>
+                          <SelectTrigger id="wallet-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="GemWallet">GemWallet</SelectItem>
+                            <SelectItem value="Crossmark">Crossmark</SelectItem>
+                            <SelectItem value="Xaman">Xaman</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="issuer-address">Issuer XRPL Address *</Label>
+                        <Input
+                          id="issuer-address"
+                          type="text"
+                          placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                          value={issuerAddress}
+                          onChange={(e) => setIssuerAddress(e.target.value)}
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Your XRPL wallet address from {walletType}
+                        </p>
+                      </div>
                     </div>
 
                     {/* Bond Structure */}
@@ -554,8 +625,11 @@ export default function CorpoPage() {
                         <div className="space-y-2">
                           <Label htmlFor="currency">Currency to Raise *</Label>
                           <div className="flex items-center h-10 px-3 py-2 rounded-md border border-input bg-muted text-sm">
-                            <span className="font-medium">USDC</span>
+                            <span className="font-medium">RLUSD</span>
                           </div>
+                          <p className="text-xs text-muted-foreground">
+                            RLUSD is the native XRPL stablecoin
+                          </p>
                         </div>
                       </div>
 
@@ -736,7 +810,7 @@ export default function CorpoPage() {
                             <div className="grid gap-2">
                               <div className="flex justify-between">
                                 <span>Principal (Initial Liquidity):</span>
-                                <span className="font-medium">{Number.parseFloat(principalTarget || "0").toFixed(2)} USDC</span>
+                                <span className="font-medium">{Number.parseFloat(principalTarget || "0").toFixed(2)} RLUSD</span>
                               </div>
                               <div className="flex justify-between">
                                 <span>Coupon Rate:</span>
@@ -749,19 +823,19 @@ export default function CorpoPage() {
                               <div className="flex justify-between">
                                 <span>Coupon per Payment:</span>
                                 <span className="font-medium">
-                                  {((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)).toFixed(2)} USDC
+                                  {((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)).toFixed(2)} RLUSD
                                 </span>
                               </div>
                               <div className="flex justify-between">
                                 <span>Total Coupons:</span>
                                 <span className="font-medium">
-                                  {(((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)) * Math.floor((durationYears * 12) / couponFrequencyMonths)).toFixed(2)} USDC
+                                  {(((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)) * Math.floor((durationYears * 12) / couponFrequencyMonths)).toFixed(2)} RLUSD
                                 </span>
                               </div>
                               <div className="h-px bg-border my-2"></div>
                               <div className="flex justify-between text-base">
                                 <span className="font-semibold text-foreground">Total Repayment at Maturity:</span>
-                                <span className="font-bold text-primary">{calculateTotalRepayment().toFixed(2)} USDC</span>
+                                <span className="font-bold text-primary">{calculateTotalRepayment().toFixed(2)} RLUSD</span>
                               </div>
                               <p className="text-xs italic mt-2">
                                 = Principal ({Number.parseFloat(principalTarget || "0").toFixed(2)}) + All Coupons ({(((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)) * Math.floor((durationYears * 12) / couponFrequencyMonths)).toFixed(2)})
@@ -777,7 +851,7 @@ export default function CorpoPage() {
                       <h3 className="font-semibold text-lg">Bond Details</h3>
 
                       <div className="space-y-2">
-                        <Label htmlFor="bond-symbol">Bond Code (Auto-generated)</Label>
+                        <Label htmlFor="bond-symbol">Bond Code</Label>
                         <Input
                           id="bond-symbol"
                           value={bondSymbol}
@@ -785,36 +859,52 @@ export default function CorpoPage() {
                           className="bg-muted cursor-not-allowed"
                         />
                         <p className="text-xs text-muted-foreground">
-                          This unique code is automatically generated and cannot be modified
+                          Unique code automatically generated and verified by database
                         </p>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="min-ticket">Minimum Ticket (Optional)</Label>
+                          <Label htmlFor="token-name">Token Name</Label>
                           <Input
-                            id="min-ticket"
-                            type="number"
-                            placeholder="Leave empty for no minimum"
-                            value={minTicket}
-                            onChange={(e) => setMinTicket(e.target.value)}
-                            min="0"
-                            step="0.01"
+                            id="token-name"
+                            value={tokenName}
+                            readOnly
+                            className="bg-muted cursor-not-allowed"
                           />
+                          <p className="text-xs text-muted-foreground">
+                            Auto-generated, unique token name
+                          </p>
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="hard-cap">Hard Cap (Optional)</Label>
+                          <Label htmlFor="token-id">Token ID</Label>
                           <Input
-                            id="hard-cap"
-                            type="number"
-                            placeholder="Leave empty for no cap"
-                            value={hardCap}
-                            onChange={(e) => setHardCap(e.target.value)}
-                            min="0"
-                            step="0.01"
+                            id="token-id"
+                            value={tokenId}
+                            readOnly
+                            className="bg-muted cursor-not-allowed"
                           />
+                          <p className="text-xs text-muted-foreground">
+                            Unique identifier verified by database
+                          </p>
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="min-ticket">Minimum Ticket (Optional)</Label>
+                        <Input
+                          id="min-ticket"
+                          type="number"
+                          placeholder="Leave empty for no minimum"
+                          value={minTicket}
+                          onChange={(e) => setMinTicket(e.target.value)}
+                          min="0"
+                          step="0.01"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Once the pool reaches the principal target, it will automatically lock and funds will be sent to the issuer
+                        </p>
                       </div>
                     </div>
 

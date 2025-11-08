@@ -10,7 +10,11 @@ export async function POST(request: Request) {
     const {
       companyName,
       contactEmail,
+      issuerAddress,
+      walletType,
       bondSymbol,
+      tokenName,
+      tokenId,
       principalTarget,
       currency,
       format,
@@ -21,7 +25,6 @@ export async function POST(request: Request) {
       couponFrequencyMonths,
       totalRepayment,
       minTicket,
-      hardCap,
       kycRequired,
     } = data
 
@@ -54,11 +57,15 @@ export async function POST(request: Request) {
         <h3>Company Information</h3>
         <p><span class="label">Company Name:</span> <span class="value">${companyName}</span></p>
         <p><span class="label">Contact Email:</span> <span class="value">${contactEmail}</span></p>
+        <p><span class="label">Issuer XRPL Address:</span> <span class="value">${issuerAddress}</span></p>
+        <p><span class="label">Wallet Type:</span> <span class="value">${walletType}</span></p>
       </div>
       
       <div class="section">
         <h3>Bond Details</h3>
         <p><span class="label">Bond Code:</span> <span class="value">${bondSymbol}</span></p>
+        <p><span class="label">Token Name:</span> <span class="value">${tokenName}</span></p>
+        <p><span class="label">Token ID:</span> <span class="value">${tokenId}</span></p>
         <p><span class="label">Format:</span> <span class="value">${format}</span></p>
         <p><span class="label">Target:</span> <span class="value">${principalTarget} ${currency}</span></p>
       </div>
@@ -91,8 +98,10 @@ export async function POST(request: Request) {
       <div class="section">
         <h3>Investment Terms</h3>
         ${minTicket ? `<p><span class="label">Minimum Ticket:</span> <span class="value">${minTicket} ${currency}</span></p>` : '<p><span class="label">Minimum Ticket:</span> <span class="value">No minimum</span></p>'}
-        ${hardCap ? `<p><span class="label">Hard Cap:</span> <span class="value">${hardCap} ${currency}</span></p>` : '<p><span class="label">Hard Cap:</span> <span class="value">No limit</span></p>'}
         <p><span class="label">KYC Required:</span> <span class="value">${kycRequired ? 'Yes' : 'No'}</span></p>
+        <p class="text-xs" style="color: #666; font-style: italic; margin-top: 8px;">
+          Note: The pool will automatically lock once it reaches the principal target amount, and funds will be sent to the issuer.
+        </p>
       </div>
       
       <div class="section">

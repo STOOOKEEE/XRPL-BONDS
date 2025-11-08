@@ -31,17 +31,19 @@ interface WalletOption {
 const WALLET_OPTIONS: WalletOption[] = [
   {
     id: 'xaman',
-    name: 'Xaman',
-    icon: '🔷',
-    description: 'Mobile wallet with OAuth',
-    requiresApiKey: true,
+    name: 'Xaman (formerly Xumm)',
+    description: 'Mobile wallet for iOS & Android',
+    icon: 'XA',
+    type: 'mobile',
+    installed: false,
   },
   {
     id: 'walletconnect',
     name: 'WalletConnect',
-    icon: '🔗',
-    description: 'QR code (support XRPL limité)',
-    requiresApiKey: true,
+    description: 'Universal wallet connection protocol',
+    icon: 'WC',
+    type: 'qr',
+    installed: false,
   },
   {
     id: 'crossmark',
@@ -52,8 +54,9 @@ const WALLET_OPTIONS: WalletOption[] = [
   {
     id: 'gemwallet',
     name: 'GemWallet',
-    icon: '💎',
-    description: 'Browser extension',
+    description: 'Browser extension wallet',
+    icon: 'GW',
+    installed: false,
   },
 ];
 
@@ -344,8 +347,8 @@ export function WalletButton() {
               ))}
             </div>
             <div className="text-xs text-muted-foreground">
-              <p>💡 Crossmark et GemWallet sont des extensions navigateur</p>
-              <p>🔑 Xaman et WalletConnect nécessitent des API keys</p>
+              <p>Crossmark et GemWallet sont des extensions navigateur</p>
+              <p>Xaman et WalletConnect nécessitent des API keys</p>
             </div>
           </DialogContent>
         </Dialog>

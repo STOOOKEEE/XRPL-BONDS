@@ -196,7 +196,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
         <div className="flex flex-col items-center justify-center gap-4 py-4">
           {error ? (
             <div className="text-center max-w-md">
-              <p className="text-sm text-destructive mb-3">❌ {error}</p>
+              <p className="text-sm text-destructive mb-3">{error}</p>
               <div className="text-xs text-muted-foreground space-y-2">
                 <p className="font-semibold">Wallets XRPL recommandés :</p>
                 <ul className="list-disc list-inside text-left">
@@ -205,7 +205,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
                   <li>Crossmark (extension Chrome)</li>
                 </ul>
                 <p className="mt-3 text-yellow-600">
-                  ⚠️ La plupart des wallets WalletConnect (MetaMask, Rainbow, etc.) ne supportent que Ethereum, pas XRPL.
+                  La plupart des wallets WalletConnect (MetaMask, Rainbow, etc.) ne supportent que Ethereum, pas XRPL.
                 </p>
               </div>
             </div>

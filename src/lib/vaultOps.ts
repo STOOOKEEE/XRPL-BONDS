@@ -14,9 +14,9 @@ const generateVaultId = (): string => {
 };
 
 /**
- * Formatter un montant en USDC (2 décimales)
+ * Formatter un montant en RLUSD (2 décimales)
  */
-const formatUSDC = (amount: number | string): string => {
+const formatRLUSD = (amount: number | string): string => {
   return parseFloat(amount.toString()).toFixed(2);
 };
 
@@ -76,9 +76,9 @@ export const createVault = async (options: {
   return {
     success: true,
     vaultId: vault.id,
-    targetAmount: formatUSDC(vault.targetAmount),
+    targetAmount: formatRLUSD(vault.targetAmount),
     status: vault.status,
-    message: `Vault créé avec succès. Objectif : ${formatUSDC(vault.targetAmount)} USDC`,
+    message: `Vault créé avec succès. Objectif : ${formatRLUSD(vault.targetAmount)} RLUSD`,
   };
 };
 
@@ -115,7 +115,7 @@ export const contributeToVault = async (
   if (newTotal > maxAmount) {
     const remaining = maxAmount - parseFloat(vault.currentAmount);
     throw new Error(
-      `Contribution exceeds vault limit. Max remaining: ${formatUSDC(remaining)} USDC. You tried to contribute: ${formatUSDC(amount)} USDC.`
+      `Contribution exceeds vault limit. Max remaining: ${formatRLUSD(remaining)} RLUSD. You tried to contribute: ${formatRLUSD(amount)} RLUSD.`
     );
   }
 
@@ -138,15 +138,15 @@ export const contributeToVault = async (
   return {
     success: true,
     vaultId,
-    contributionAmount: formatUSDC(amount),
-    totalRaised: formatUSDC(vault.currentAmount),
-    targetAmount: formatUSDC(vault.targetAmount),
-    remaining: formatUSDC(maxAmount - newTotal),
+    contributionAmount: formatRLUSD(amount),
+    totalRaised: formatRLUSD(vault.currentAmount),
+    targetAmount: formatRLUSD(vault.targetAmount),
+    remaining: formatRLUSD(maxAmount - newTotal),
     progress: Math.min(100, (newTotal / maxAmount) * 100).toFixed(2),
     objectiveReached: isComplete,
     message: isComplete
       ? `✅ Objectif atteint! Finalization en cours...`
-      : `Contribution enregistrée. ${formatUSDC(maxAmount - newTotal)} USDC restants.`,
+      : `Contribution enregistrée. ${formatRLUSD(maxAmount - newTotal)} RLUSD restants.`,
   };
 };
 
@@ -166,15 +166,15 @@ export const getVaultStatus = (vaultId: string): any => {
     vaultId: vault.id,
     status: vault.status,
     tokenSymbol: vault.tokenSymbol,
-    targetAmount: formatUSDC(vault.targetAmount),
-    currentAmount: formatUSDC(vault.currentAmount),
-    remaining: formatUSDC(targetAmount - currentAmount),
+    targetAmount: formatRLUSD(vault.targetAmount),
+    currentAmount: formatRLUSD(vault.currentAmount),
+    remaining: formatRLUSD(targetAmount - currentAmount),
     progress: Math.min(100, (currentAmount / targetAmount) * 100).toFixed(2),
     recipientAddress: vault.recipientAddress,
     investorsCount: vault.investors.length,
     investors: vault.investors.map((inv: any) => ({
       address: inv.address,
-      amount: formatUSDC(inv.amount),
+      amount: formatRLUSD(inv.amount),
       tokensMinted: inv.tokensMinted,
     })),
     multisig: {
@@ -201,7 +201,7 @@ export const finalizeVault = async (vaultId: string, signatures: string[] = []):
 
   if (currentAmount < targetAmount) {
     throw new Error(
-      `Objective not reached yet. Current: ${formatUSDC(currentAmount)} / Target: ${formatUSDC(targetAmount)}`
+      `Objective not reached yet. Current: ${formatRLUSD(currentAmount)} / Target: ${formatRLUSD(targetAmount)}`
     );
   }
 
@@ -237,11 +237,11 @@ export const finalizeVault = async (vaultId: string, signatures: string[] = []):
     message: `✅ Vault finalized successfully!`,
     vaultId,
     status: vault.status,
-    totalMinted: formatUSDC(totalMinted),
+    totalMinted: formatRLUSD(totalMinted),
     investors: updatedInvestors.map((inv: any) => ({
       address: inv.address,
-      amount: formatUSDC(inv.amount),
-      tokensMinted: formatUSDC(inv.tokensMinted),
+      amount: formatRLUSD(inv.amount),
+      tokensMinted: formatRLUSD(inv.tokensMinted),
     })),
     recipientAddress: vault.recipientAddress,
     transactionHash: vault.transactionHash,
@@ -263,8 +263,8 @@ export const listAllVaults = (): any => {
       return {
         vaultId: vault.id,
         status: vault.status,
-        targetAmount: formatUSDC(vault.targetAmount),
-        currentAmount: formatUSDC(vault.currentAmount),
+        targetAmount: formatRLUSD(vault.targetAmount),
+        currentAmount: formatRLUSD(vault.currentAmount),
         progress: ((currentAmount / targetAmount) * 100).toFixed(2),
         investorsCount: vault.investors.length,
         createdAt: vault.createdAt,

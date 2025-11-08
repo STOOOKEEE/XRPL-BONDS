@@ -189,8 +189,8 @@ async function runOnChainIntegrationTest() {
 
     const now = Math.floor(Date.now() / 1000);
     const deadline = now + 300; // 5 minutes (pour tests rapides)
-    const objective = BigInt(100_000_000); // 100 XRP en drops (réduit pour les soldes disponibles)
-    const cap = BigInt(100_000_000); // Cap = objectif pour ce test
+    const objective = BigInt(30_000_000); // 30 XRP en drops (réduit pour tenir compte de la réserve de 10 XRP)
+    const cap = BigInt(30_000_000); // Cap = objectif pour ce test
 
     const campaignState: CampaignState = {
       campaign_id: 'test-campaign-' + Date.now(),
@@ -216,10 +216,10 @@ async function runOnChainIntegrationTest() {
     console.log('📋 PHASE 3: INVESTISSEMENTS VALIDES (avant deadline, sous le cap)');
     console.log('─'.repeat(80));
 
-    // Investissement 1: 30 XRP
-    console.log('\n💸 Investissement 1: 30 XRP par Investor 1');
-    const inv1Amount = BigInt(30_000_000); // 30 XRP en drops
-    const tx1Hash = await sendPayment(client, investor1.wallet, treasury.address, '30');
+    // Investissement 1: 20 XRP
+    console.log('\n💸 Investissement 1: 20 XRP par Investor 1');
+    const inv1Amount = BigInt(20_000_000); // 20 XRP en drops
+    const tx1Hash = await sendPayment(client, investor1.wallet, treasury.address, '20');
     console.log(`   ✅ Transaction: ${tx1Hash}`);
     
     // Process via wasm
@@ -241,10 +241,10 @@ async function runOnChainIntegrationTest() {
 
     await sleep(5000); // Attendre validation
 
-    // Investissement 2: 40 XRP
-    console.log('\n💸 Investissement 2: 40 XRP par Investor 2');
-    const inv2Amount = BigInt(40_000_000);
-    const tx2Hash = await sendPayment(client, investor2.wallet, treasury.address, '40');
+    // Investissement 2: 5 XRP (réduit pour tenir compte de la réserve)
+    console.log('\n💸 Investissement 2: 5 XRP par Investor 2');
+    const inv2Amount = BigInt(5_000_000);
+    const tx2Hash = await sendPayment(client, investor2.wallet, treasury.address, '5');
     console.log(`   ✅ Transaction: ${tx2Hash}`);
 
     const result2 = escrowWasm.process_investment(
@@ -270,12 +270,12 @@ async function runOnChainIntegrationTest() {
     console.log('📋 PHASE 4: INVESTISSEMENT REJETÉ (dépassement du cap)');
     console.log('─'.repeat(80));
 
-    console.log('\n💸 Tentative investissement 3: 50 XRP (dépasse le cap de 100 XRP)');
+    console.log('\n💸 Tentative investissement 3: 10 XRP (dépasse le cap de 30 XRP)');
     console.log(`   Current raised: ${dropsToXrp(campaignState.current_raised.toString())} XRP`);
     console.log(`   Cap: ${dropsToXrp(cap.toString())} XRP`);
-    console.log(`   Tentative: 50 XRP → Total serait: ${dropsToXrp((campaignState.current_raised + BigInt(50_000_000)).toString())} XRP`);
+    console.log(`   Tentative: 10 XRP → Total serait: ${dropsToXrp((campaignState.current_raised + BigInt(10_000_000)).toString())} XRP`);
 
-    const inv3Amount = BigInt(50_000_000);
+    const inv3Amount = BigInt(10_000_000);
     const result3 = escrowWasm.process_investment(
       serializeState(campaignState),
       investor3.address,

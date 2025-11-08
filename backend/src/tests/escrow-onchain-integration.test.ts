@@ -13,10 +13,14 @@
 
 import { Client, Wallet, xrpToDrops, dropsToXrp } from 'xrpl';
 import * as escrowWasm from '../../pkg/escrow/escrow_wasm';
+import * as dotenv from 'dotenv';
 
-// Configuration
-const TESTNET_URL = 'wss://s.devnet.rippletest.net:51233';
-const FAUCET_URL = 'https://faucet.devnet.rippletest.net/accounts';
+// Charger les variables d'environnement
+dotenv.config();
+
+// Configuration - Utiliser l'URL du .env
+const TESTNET_URL = process.env.XRPL_WEBSOCKET_URL || 'wss://s.devnet.rippletest.net:51233';
+const FAUCET_URL = process.env.XRPL_FAUCET_URL || 'https://faucet.devnet.rippletest.net/accounts';
 
 interface TestWallet {
   wallet: Wallet;
@@ -35,6 +39,25 @@ interface CampaignState {
   investment_issuer: string;
   token_currency: string;
   token_issuer: string;
+}
+
+// Helper: Charger un wallet depuis le .env
+function loadWalletFromEnv(addressKey: string, secretKey: string, label: string): TestWallet {
+  const address = process.env[addressKey];
+  const secret = process.env[secretKey];
+  
+  if (!address || !secret) {
+    throw new Error(`Missing ${addressKey} or ${secretKey} in .env file`);
+  }
+  
+  const wallet = Wallet.fromSeed(secret);
+  console.log(`\n🔑 Loaded ${label} from .env: ${address}`);
+  
+  return {
+    wallet,
+    address: wallet.address,
+    label,
+  };
 }
 
 // Helper: Créer et funder un wallet
@@ -138,20 +161,19 @@ async function runOnChainIntegrationTest() {
   try {
     // ===== PHASE 1: SETUP =====
     console.log('\n' + '─'.repeat(80));
-    console.log('📋 PHASE 1: SETUP - Création des wallets');
+    console.log('📋 PHASE 1: SETUP - Chargement des wallets depuis .env');
     console.log('─'.repeat(80));
 
-    const treasury = await createAndFundWallet(client, 'Treasury (trésor de la campagne)');
-    await sleep(3000); // Attendre validation ledger
+    // Charger les wallets existants depuis le .env
+    const treasury = loadWalletFromEnv('ISSUER_ADDRESS', 'ISSUER_SECRET', 'Treasury (COMPANY)');
+    const investor1 = loadWalletFromEnv('INVESTOR1_ADDRESS', 'INVESTOR1_SECRET', 'Investor 1');
+    const investor2 = loadWalletFromEnv('INVESTOR2_ADDRESS', 'INVESTOR2_SECRET', 'Investor 2');
     
-    const investor1 = await createAndFundWallet(client, 'Investor 1');
-    await sleep(3000); // Attendre validation ledger
-    
-    const investor2 = await createAndFundWallet(client, 'Investor 2');
-    await sleep(3000); // Attendre validation ledger
-    
+    // Créer uniquement Investor 3 via le faucet
+    console.log('\n🔑 Creating Investor 3 (new wallet)...');
     const investor3 = await createAndFundWallet(client, 'Investor 3');
-    await sleep(3000); // Attendre validation ledger
+    console.log('⏳ Waiting for ledger validation (6 seconds)...');
+    await sleep(6000); // Attendre validation ledger (plus long pour être sûr)
 
     // Vérifier les balances initiales
     console.log('\n💰 Balances initiales:');
@@ -167,8 +189,8 @@ async function runOnChainIntegrationTest() {
 
     const now = Math.floor(Date.now() / 1000);
     const deadline = now + 300; // 5 minutes (pour tests rapides)
-    const objective = BigInt(500_000_000); // 500 XRP en drops
-    const cap = BigInt(500_000_000); // Cap = objectif pour ce test
+    const objective = BigInt(100_000_000); // 100 XRP en drops (réduit pour les soldes disponibles)
+    const cap = BigInt(100_000_000); // Cap = objectif pour ce test
 
     const campaignState: CampaignState = {
       campaign_id: 'test-campaign-' + Date.now(),
@@ -194,10 +216,10 @@ async function runOnChainIntegrationTest() {
     console.log('📋 PHASE 3: INVESTISSEMENTS VALIDES (avant deadline, sous le cap)');
     console.log('─'.repeat(80));
 
-    // Investissement 1: 150 XRP
-    console.log('\n💸 Investissement 1: 150 XRP par Investor 1');
-    const inv1Amount = BigInt(150_000_000); // 150 XRP en drops
-    const tx1Hash = await sendPayment(client, investor1.wallet, treasury.address, '150');
+    // Investissement 1: 30 XRP
+    console.log('\n💸 Investissement 1: 30 XRP par Investor 1');
+    const inv1Amount = BigInt(30_000_000); // 30 XRP en drops
+    const tx1Hash = await sendPayment(client, investor1.wallet, treasury.address, '30');
     console.log(`   ✅ Transaction: ${tx1Hash}`);
     
     // Process via wasm
@@ -219,10 +241,10 @@ async function runOnChainIntegrationTest() {
 
     await sleep(5000); // Attendre validation
 
-    // Investissement 2: 200 XRP
-    console.log('\n💸 Investissement 2: 200 XRP par Investor 2');
-    const inv2Amount = BigInt(200_000_000);
-    const tx2Hash = await sendPayment(client, investor2.wallet, treasury.address, '200');
+    // Investissement 2: 40 XRP
+    console.log('\n💸 Investissement 2: 40 XRP par Investor 2');
+    const inv2Amount = BigInt(40_000_000);
+    const tx2Hash = await sendPayment(client, investor2.wallet, treasury.address, '40');
     console.log(`   ✅ Transaction: ${tx2Hash}`);
 
     const result2 = escrowWasm.process_investment(
@@ -248,12 +270,12 @@ async function runOnChainIntegrationTest() {
     console.log('📋 PHASE 4: INVESTISSEMENT REJETÉ (dépassement du cap)');
     console.log('─'.repeat(80));
 
-    console.log('\n💸 Tentative investissement 3: 200 XRP (dépasse le cap de 500 XRP)');
+    console.log('\n💸 Tentative investissement 3: 50 XRP (dépasse le cap de 100 XRP)');
     console.log(`   Current raised: ${dropsToXrp(campaignState.current_raised.toString())} XRP`);
     console.log(`   Cap: ${dropsToXrp(cap.toString())} XRP`);
-    console.log(`   Tentative: 200 XRP → Total serait: ${dropsToXrp((campaignState.current_raised + BigInt(200_000_000)).toString())} XRP`);
+    console.log(`   Tentative: 50 XRP → Total serait: ${dropsToXrp((campaignState.current_raised + BigInt(50_000_000)).toString())} XRP`);
 
-    const inv3Amount = BigInt(200_000_000);
+    const inv3Amount = BigInt(50_000_000);
     const result3 = escrowWasm.process_investment(
       serializeState(campaignState),
       investor3.address,
@@ -292,7 +314,7 @@ async function runOnChainIntegrationTest() {
     );
     console.log(`   📊 Wasm Result: ${JSON.stringify(result3b)}`);
 
-    if (result3b.accepted && result3b.objective_reached) {
+    if (result3b.accepted && result3b.send_to_treasury) {
       campaignState.current_raised += remainingAmount;
       campaignState.investments.set(investor3.address, remainingAmount);
       console.log(`   ✅ Investissement accepté! Cap atteint: ${dropsToXrp(campaignState.current_raised.toString())} XRP`);
@@ -353,18 +375,20 @@ async function runOnChainIntegrationTest() {
     );
     console.log(`\n📊 Finalisation result: ${JSON.stringify(finalizeResult, null, 2)}`);
 
-    if (!finalizeResult.success) {
-      console.log(`   ✅ CORRECT: Campagne échouée (objectif non atteint)`);
+    if (finalizeResult.success && !finalizeResult.objective_reached) {
+      console.log(`   ✅ CORRECT: Campagne finalisée - objectif NON atteint`);
       console.log(`   💸 Remboursements à effectuer: ${finalizeResult.refunds?.length || 0}`);
       
       if (finalizeResult.refunds && finalizeResult.refunds.length > 0) {
         console.log('\n   Liste des remboursements:');
-        for (const refund of finalizeResult.refunds) {
-          console.log(`      → ${refund.investor}: ${dropsToXrp(refund.amount.toString())} XRP`);
+        for (const [investor, amount] of finalizeResult.refunds) {
+          console.log(`      → ${investor}: ${dropsToXrp(amount.toString())} XRP`);
         }
       }
-    } else {
+    } else if (finalizeResult.objective_reached) {
       throw new Error('❌ ERREUR: Campagne aurait dû échouer (objectif non atteint)!');
+    } else {
+      throw new Error(`❌ ERREUR de finalisation: ${JSON.stringify(finalizeResult)}`);
     }
 
     // ===== PHASE 8: TEST REJET APRÈS DEADLINE =====

@@ -38,19 +38,52 @@ export default function XamanCallbackPage() {
 
         console.log('🔑 Xaman API Key trouvée dans callback:', xamanApiKey.substring(0, 8) + '...')
 
-        // Importer les utilitaires Xaman
-        const { waitForXamanSignature } = await import('@/lib/xaman')
+        // Polling pour attendre la signature
+        let payloadData: any = null
+        const maxAttempts = 30
+        const intervalMs = 2000
 
-        // Attendre la signature avec polling
-        const payloadData = await waitForXamanSignature(
-          xamanApiKey,
-          payloadId,
-          30,
-          2000,
-          (attempt, maxAttempts) => {
-            setStatus(`En attente de votre approbation dans Xaman... (${attempt}/${maxAttempts})`)
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          setStatus(`En attente de votre approbation dans Xaman... (${attempt + 1}/${maxAttempts})`)
+          
+          const response = await fetch(`/api/xaman/payload/${payloadId}`)
+
+          if (!response.ok) {
+            throw new Error('Impossible de récupérer le statut du payload')
           }
-        )
+
+          const status = await response.json()
+          
+          // Signature confirmée
+          if (status.meta.signed === true) {
+            payloadData = status
+            break
+          }
+
+          // Signature refusée
+          if (status.meta.signed === false) {
+            throw new Error('Connexion refusée par l\'utilisateur')
+          }
+
+          // Payload expiré
+          if (status.meta.expired) {
+            throw new Error('Le délai de connexion a expiré')
+          }
+
+          // Payload annulé
+          if (status.meta.cancelled) {
+            throw new Error('Connexion annulée')
+          }
+
+          // Attendre avant le prochain essai
+          if (attempt < maxAttempts - 1) {
+            await new Promise(resolve => setTimeout(resolve, intervalMs))
+          }
+        }
+
+        if (!payloadData) {
+          throw new Error('Délai d\'attente dépassé. Veuillez réessayer.')
+        }
 
         // Récupérer l'adresse du compte
         const account = payloadData.response?.account

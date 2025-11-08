@@ -17,6 +17,8 @@ import { Wallet, Copy, LogOut } from "lucide-react"
 import { formatAddress } from "@/lib/wallet"
 import { createWalletManager } from "@/lib/wallet-manager"
 import { ENV } from "@/config/env"
+import { WalletConnectModal } from "./walletconnect-modal"
+import { redirectToXamanOAuth2 } from "@/lib/xaman-oauth2"
 
 interface WalletOption {
   id: string;
@@ -60,6 +62,7 @@ export function WalletButton() {
   const { toast } = useToast()
   const [isConnecting, setIsConnecting] = useState(false)
   const [showWalletModal, setShowWalletModal] = useState(false)
+  const [showWalletConnectModal, setShowWalletConnectModal] = useState(false)
   const [availableWallets, setAvailableWallets] = useState<WalletOption[]>([])
 
   // Initialiser le WalletManager si non présent
@@ -196,52 +199,41 @@ export function WalletButton() {
           break;
           
         case 'xaman':
-          console.log(`🔄 Connexion Xaman...`);
-          // Vérifier que la clé API est configurée
+          console.log(`🔄 Connexion Xaman via OAuth2...`);
           const xamanApiKey = ENV.XAMAN_API_KEY;
-          if (!xamanApiKey || xamanApiKey === 'your-xaman-api-key-here') {
-            throw new Error('Xaman API Key non configurée. Ajoutez NEXT_PUBLIC_XAMAN_API_KEY dans votre .env.local');
+          if (!xamanApiKey) {
+            throw new Error('Xaman API Key non configurée');
           }
-          
-          console.log('🔑 Xaman API Key trouvée:', xamanApiKey.substring(0, 8) + '...');
-          
           toast({
             title: "Connexion Xaman",
-            description: "Création du payload de connexion...",
+            description: "Redirection vers Xaman...",
           });
-
-          // Importer les utilitaires Xaman
-          const { createXamanSignInPayload } = await import('@/lib/xaman');
-          
-          // Créer le payload
-          const returnUrl = `${window.location.origin}/xaman-callback`;
-          console.log('🔗 Return URL:', returnUrl);
-          
-          const payloadData = await createXamanSignInPayload(xamanApiKey, returnUrl);
-          
-          console.log('Payload Xaman créé:', payloadData);
-          
-          // Sauvegarder le payload ID dans le localStorage
-          localStorage.setItem('xaman_payload_id', payloadData.uuid);
-          
-          toast({
-            title: "Redirection vers Xaman",
-            description: "Veuillez approuver la connexion dans l'application Xaman",
-          });
-          
-          // Attendre un peu avant de rediriger
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Rediriger vers Xaman (mobile ou desktop)
-          window.location.href = payloadData.next.always;
-          
-          // Ne pas continuer l'exécution car on redirige
+          redirectToXamanOAuth2(xamanApiKey, `${window.location.origin}/xaman-oauth2-callback`);
           return;
           
         case 'walletconnect':
           console.log(`🔄 Connexion WalletConnect...`);
-          // WalletConnect nécessite une implémentation complexe avec QR code
-          throw new Error('WalletConnect sera disponible prochainement. Utilisez GemWallet, Crossmark ou Xaman pour le moment.');
+          
+          // Vérifier que le Project ID est configuré
+          const wcProjectId = ENV.WALLETCONNECT_PROJECT_ID;
+          if (!wcProjectId || wcProjectId === 'your-walletconnect-project-id-here') {
+            throw new Error('WalletConnect Project ID non configuré. Obtenez-en un sur https://cloud.walletconnect.com');
+          }
+          
+          console.log('🔑 WalletConnect Project ID trouvé:', wcProjectId.substring(0, 8) + '...');
+          
+          // Fermer la modal de sélection et ouvrir la modal WalletConnect
+          setShowWalletModal(false);
+          setShowWalletConnectModal(true);
+          
+          toast({
+            title: "WalletConnect",
+            description: "Ouvrez votre app Xaman et scannez le QR code qui va apparaître",
+          });
+          
+          // Ne pas continuer - le modal gérera la connexion
+          return;
+          break;
           
         default:
           throw new Error(`Wallet ${walletId} non supporté`);
@@ -353,6 +345,25 @@ export function WalletButton() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Modal WalletConnect avec QR code */}
+        <WalletConnectModal
+          isOpen={showWalletConnectModal}
+          onClose={() => setShowWalletConnectModal(false)}
+          onConnect={(address, publicKey) => {
+            setIsConnected(true);
+            setAccountInfo({
+              address,
+              publicKey,
+              network: { name: 'testnet' }
+            });
+            toast({
+              title: "Wallet connecté",
+              description: `Connecté avec WalletConnect`,
+            });
+          }}
+          projectId={ENV.WALLETCONNECT_PROJECT_ID}
+        />
       </>
     )
   }

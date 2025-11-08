@@ -6,6 +6,7 @@
 export const ENV = {
   XAMAN_API_KEY: process.env.NEXT_PUBLIC_XAMAN_API_KEY || '',
   WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
+  API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
 } as const;
 
 // Vérifications au chargement (seulement en dev)
@@ -16,4 +17,5 @@ if (process.env.NODE_ENV === 'development') {
   if (!ENV.WALLETCONNECT_PROJECT_ID) {
     console.warn('⚠️ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID non configurée');
   }
+  console.log('🔗 API Backend URL:', ENV.API_URL);
 }

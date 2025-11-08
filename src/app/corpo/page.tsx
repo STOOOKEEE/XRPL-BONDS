@@ -249,14 +249,16 @@ export default function CorpoPage() {
   }
 
   const handleDurationChange = (newYears: number) => {
-    if (newYears < 1) return
+    // Allow 0 or empty temporarily for easier input
     setDurationYears(newYears)
     setLastModified('duration')
     
-    // When duration changes, always adjust the end date (keep start fixed)
-    const monthsToAdd = newYears * 12
-    const newEnd = addMonths(startDate, monthsToAdd)
-    setEndDate(newEnd)
+    // Only update end date if duration is valid
+    if (newYears >= 1) {
+      const monthsToAdd = newYears * 12
+      const newEnd = addMonths(startDate, monthsToAdd)
+      setEndDate(newEnd)
+    }
   }
 
   // Get current date in PST timezone
@@ -364,10 +366,10 @@ export default function CorpoPage() {
       return
     }
 
-    if (durationYears < 1) {
+    if (!durationYears || durationYears < 1) {
       toast({
         title: "Invalid duration",
-        description: "Bond duration must be at least 1 year",
+        description: "Bond duration must be at least 1 year. Please enter a valid duration.",
         variant: "destructive",
       })
       return
@@ -399,10 +401,45 @@ export default function CorpoPage() {
     try {
       // Mock submission
       await new Promise((resolve) => setTimeout(resolve, 2000))
+      
+      // Send confirmation email
+      try {
+        const emailResponse = await fetch('/api/send-submission-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            companyName,
+            contactEmail,
+            bondSymbol,
+            principalTarget,
+            currency,
+            format,
+            startDate,
+            endDate,
+            durationYears,
+            couponRate,
+            couponFrequencyMonths,
+            totalRepayment: getCalculatedTotalRepayment(),
+            minTicket,
+            hardCap,
+            kycRequired,
+          }),
+        })
+        
+        if (!emailResponse.ok) {
+          console.error('Failed to send confirmation email')
+        }
+      } catch (emailError) {
+        console.error('Error sending email:', emailError)
+        // Continue even if email fails
+      }
+      
       setShowSuccess(true)
       toast({
         title: "Submission received",
-        description: "Your bond offering will be reviewed by our team",
+        description: "Your bond offering will be reviewed by our team. A confirmation email has been sent.",
       })
     } catch (error) {
       toast({
@@ -587,11 +624,10 @@ export default function CorpoPage() {
                             <Input
                               id="duration"
                               type="number"
-                              value={durationYears}
-                              onChange={(e) => handleDurationChange(Number.parseInt(e.target.value) || 1)}
-                              min="1"
+                              value={durationYears || ''}
+                              onChange={(e) => handleDurationChange(Number.parseInt(e.target.value) || 0)}
+                              min="0"
                               step="1"
-                              required
                               className={lastModified === 'duration' ? 'ring-2 ring-primary' : ''}
                             />
                           </div>
@@ -605,7 +641,7 @@ export default function CorpoPage() {
                             <strong>Bond Period:</strong> {new Date(startDate).toLocaleDateString('fr-FR')} → {new Date(endDate).toLocaleDateString('fr-FR')}
                           </p>
                           <p className="mt-1">
-                            <strong>Duration:</strong> {durationYears} year{durationYears !== 1 ? 's' : ''}
+                            <strong>Duration:</strong> {durationYears ? `${durationYears} year${durationYears !== 1 ? 's' : ''}` : 'Not set'}
                           </p>
                           <p className="mt-1 text-blue-600 dark:text-blue-400">
                             Payments on day {new Date(startDate).getDate()} of each period

@@ -4,7 +4,8 @@
   "description": "Placeholder - backend server removed in favor of XRPL Hooks",
   "private": true,
   "scripts": {
-    "create-mptoken": "ts-node ./mptoken/index.ts"
+    "create-mptoken": "ts-node ./mptoken/index.ts",
+    "create-wallet": "ts-node ./mptoken/create_and_fund_wallet.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

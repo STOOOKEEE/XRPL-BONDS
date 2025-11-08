@@ -6,12 +6,44 @@ dotenv.config();
 const WS_URL = process.env.XRPL_WEBSOCKET_URL ?? 'wss://s.altnet.rippletest.net:51233';
 const client = new Client(WS_URL);
 
+// Helper: try to transfer/mint MPToken to a holder after issuance
+async function transferMPTokenToHolder(
+  client: Client,
+  issuerWallet: Wallet,
+  issuanceId: string,
+  holderAddress: string,
+  amountSmallestUnit: string,
+) {
+  if (!issuanceId || issuanceId === 'n/a') throw new Error('issuanceId missing')
+  if (!holderAddress) throw new Error('holder address missing')
+
+  const submitTransfer = async (txType: string) => {
+    const tx: any = {
+      TransactionType: txType,
+      Account: issuerWallet.address,
+      IssuanceID: issuanceId,
+      Destination: holderAddress,
+      Amount: amountSmallestUnit,
+    }
+    console.log(`Submitting ${txType} to ${holderAddress} amount=${amountSmallestUnit}`)
+    return client.submitAndWait(tx, { autofill: true, wallet: issuerWallet })
+  }
+
+  try {
+    const r = await submitTransfer('MPTokenMint')
+    return r
+  } catch (err) {
+    console.warn('MPTokenMint failed, trying MPTokenTransfer fallback:', (err as any)?.message ?? err)
+    const r2 = await submitTransfer('MPTokenTransfer')
+    return r2
+  }
+}
+
 
 const main = async () => {
   try {
     console.log("Let's create a Multi-Purpose Token...");
-    await client.connect();
-
+  await client.connect();
     // Determine issuer and holder wallets: use secrets from .env if present, otherwise fund new wallets (devnet)
     let issuerWallet: Wallet;
     let holderWallet: Wallet;
@@ -99,6 +131,33 @@ const main = async () => {
     // Issuance ID probable (deux noms possibles selon la réponse)
     const issuanceId = res?.result?.meta?.mpt_issuance_id ?? res?.result?.meta?.mptIssuanceId ?? 'n/a';
     console.log('MPToken Issuance ID:', issuanceId);
+
+    // Automatic transfer is disabled by default. To enable automatic transfer after issuance,
+    // set AUTO_TRANSFER=true in backend/.env. By default we only create (mint) the issuance.
+    if (process.env.AUTO_TRANSFER === 'true') {
+      if (issuanceId && issuanceId !== 'n/a') {
+        const holderAddress = process.env.HOLDER_ADDRESS ?? holderWallet.address;
+        const amountToTransfer = transactionBlob.MaximumAmount ?? '0';
+        if (amountToTransfer === '0') {
+          console.warn('No MaximumAmount set on transactionBlob — skipping automatic transfer');
+        } else {
+          try {
+            const transferResult = await transferMPTokenToHolder(client, issuerWallet, issuanceId, holderAddress, amountToTransfer);
+            const tRes: any = transferResult as any;
+            const transferHash = tRes?.result?.tx_json?.hash ?? tRes?.result?.hash ?? 'n/a';
+            const transferStatus = tRes?.result?.meta?.TransactionResult ?? tRes?.result?.engine_result ?? 'unknown';
+            console.log('Transfer tx hash:', transferHash);
+            console.log('Transfer status:', transferStatus);
+          } catch (transferErr) {
+            console.error('Automatic transfer failed:', transferErr);
+          }
+        }
+      } else {
+        console.warn('issuanceId not found — cannot auto-transfer');
+      }
+    } else {
+      console.log('AUTO_TRANSFER not enabled — skipping automatic transfer (only mint performed).');
+    }
 
     console.log('All done!');
   } catch (error) {

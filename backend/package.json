@@ -12,9 +12,9 @@
     "create-bond": "ts-node src/scripts/create-bond.ts",
     "sync-holders": "ts-node src/scripts/sync-holders.ts",
     "execute-coupons": "ts-node src/scripts/execute-coupons.ts",
-    "test-workflow": "ts-node src/scripts/test-complete-workflow.ts"
-    ,
-    "build-escrow-wasm": "cd escrow-wasm && wasm-pack build --target nodejs --out-dir ../pkg/escrow --release"
+    "test-workflow": "ts-node src/scripts/test-complete-workflow.ts",
+    "build-escrow-wasm": "cd escrow-wasm && wasm-pack build --target nodejs --out-dir ../pkg/escrow --release",
+    "example-escrow": "ts-node src/examples/escrow-campaign-example.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

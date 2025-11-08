@@ -440,6 +440,47 @@ export default function CorpoPage() {
       // Mock submission
       await new Promise((resolve) => setTimeout(resolve, 2000))
       
+      // Send to backend API
+      try {
+        const backendResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/bonds/submit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.NEXT_PUBLIC_API_KEY || ''
+          },
+          body: JSON.stringify({
+            issuerName: companyName,
+            contactEmail: contactEmail,
+            couponFrequency: couponFrequencyMonths,
+            totalSupply: principalTarget,
+            issuerAddress: issuerAddress,
+            issueDate: startDate,
+            maturityDate: endDate,
+            durationYears: durationYears,
+            couponRate: couponRate,
+            bondId: bondSymbol,
+            tokenName: tokenName,
+            tokenCurrency: tokenId,
+            minimumTicket: minTicket || "0",
+            walletType: walletType,
+            bondFormat: format,
+            currency: currency,
+            totalRepayment: getCalculatedTotalRepayment(),
+            kycRequired: kycRequired
+          })
+        })
+        
+        const backendResult = await backendResponse.json()
+        if (backendResult.ok) {
+          console.log('✅ Bond créé dans MongoDB:', backendResult.bond)
+        } else {
+          console.error('❌ Erreur backend:', backendResult)
+        }
+      } catch (backendError) {
+        console.error('❌ Erreur appel backend:', backendError)
+        // Continue even if backend fails
+      }
+      
       // Send confirmation email
       try {
         const emailResponse = await fetch('/api/send-submission-email', {

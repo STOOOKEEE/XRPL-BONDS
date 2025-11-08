@@ -74,7 +74,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
 
         if (connectionUri) {
           setUri(connectionUri)
-          setStatus('Scannez le QR code avec votre wallet Xaman')
+          setStatus('Scannez le QR code avec un wallet compatible')
           
           console.log('🎨 Génération du QR code...')
           
@@ -128,7 +128,11 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
         
         const xrplNamespace = namespaces.xrpl
         if (!xrplNamespace) {
-          throw new Error('Namespace XRPL non trouvé dans la session')
+          const availableNamespaces = Object.keys(namespaces).join(', ')
+          throw new Error(
+            `Ce wallet ne supporte pas XRPL. Il supporte: ${availableNamespaces || 'aucun namespace compatible'}. ` +
+            `Pour vous connecter, utilisez les boutons Xaman, GemWallet ou Crossmark.`
+          )
         }
 
         const accounts = xrplNamespace.accounts || []
@@ -191,11 +195,19 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
         
         <div className="flex flex-col items-center justify-center gap-4 py-4">
           {error ? (
-            <div className="text-center">
-              <p className="text-sm text-destructive mb-2">❌ {error}</p>
-              <p className="text-xs text-muted-foreground">
-                Essayez le bouton "Xaman" pour une connexion directe (plus simple)
-              </p>
+            <div className="text-center max-w-md">
+              <p className="text-sm text-destructive mb-3">❌ {error}</p>
+              <div className="text-xs text-muted-foreground space-y-2">
+                <p className="font-semibold">Wallets XRPL recommandés :</p>
+                <ul className="list-disc list-inside text-left">
+                  <li>Xaman (mobile/desktop)</li>
+                  <li>GemWallet (extension Chrome)</li>
+                  <li>Crossmark (extension Chrome)</li>
+                </ul>
+                <p className="mt-3 text-yellow-600">
+                  ⚠️ La plupart des wallets WalletConnect (MetaMask, Rainbow, etc.) ne supportent que Ethereum, pas XRPL.
+                </p>
+              </div>
             </div>
           ) : (
             <>
@@ -209,9 +221,9 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
                     {status}
                   </p>
                   <p className="text-xs text-center text-muted-foreground">
-                    1. Ouvrez Xaman sur votre téléphone<br/>
-                    2. Appuyez sur l'icône QR/Scan<br/>
-                    3. Scannez ce QR code
+                    Utilisez un wallet compatible WalletConnect :<br/>
+                    • MetaMask, Rainbow, Trust Wallet, etc.<br/>
+                    • Pour Xaman, utilisez le bouton "Xaman" directement
                   </p>
                 </>
               ) : (

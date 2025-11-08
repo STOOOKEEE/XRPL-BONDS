@@ -40,7 +40,7 @@ const WALLET_OPTIONS: WalletOption[] = [
     id: 'walletconnect',
     name: 'WalletConnect',
     icon: '🔗',
-    description: 'Scan QR with any wallet',
+    description: 'QR code (support XRPL limité)',
     requiresApiKey: true,
   },
   {

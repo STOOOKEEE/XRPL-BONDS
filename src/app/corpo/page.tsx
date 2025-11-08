@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,8 +38,31 @@ export default function CorpoPage() {
     return date.toISOString().split('T')[0]
   }
 
+  const normalizeDateToValidDay = (dateStr: string): string => {
+    const date = new Date(dateStr)
+    let day = date.getDate()
+    
+    // Force day between 1 and 28
+    if (day > 28) {
+      day = 28
+    } else if (day < 1) {
+      day = 1
+    }
+    
+    date.setDate(day)
+    return date.toISOString().split('T')[0]
+  }
+
+  // Generate a unique bond code
+  const generateBondCode = (): string => {
+    const timestamp = Date.now()
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+    return `BOND-${timestamp}-${random}`
+  }
+
   const addMonths = (dateStr: string, months: number): string => {
     const date = new Date(dateStr)
+    const currentDay = date.getDate()
     const targetMonth = date.getMonth() + months
     const targetYear = date.getFullYear() + Math.floor(targetMonth / 12)
     const finalMonth = targetMonth % 12
@@ -47,11 +70,10 @@ export default function CorpoPage() {
     date.setFullYear(targetYear)
     date.setMonth(finalMonth)
     
-    // Handle edge cases for days that don't exist in the target month
+    // Keep the same day of month, but ensure it's between 1-28
+    const targetDay = Math.min(currentDay, 28)
     const lastDayOfMonth = new Date(targetYear, finalMonth + 1, 0).getDate()
-    if (date.getDate() > lastDayOfMonth) {
-      date.setDate(lastDayOfMonth)
-    }
+    date.setDate(Math.min(targetDay, lastDayOfMonth))
     
     return date.toISOString().split('T')[0]
   }
@@ -72,28 +94,6 @@ export default function CorpoPage() {
     }
     
     return Math.max(1, totalMonths) // Minimum 1 month
-  }
-
-  const getDivisors = (n: number): number[] => {
-    const divisors: number[] = []
-    for (let i = 1; i <= n; i++) {
-      if (n % i === 0) {
-        divisors.push(i)
-      }
-    }
-    return divisors
-  }
-
-  const getAvailableFrequencies = (durationMonths: number): Array<{value: number, label: string}> => {
-    const divisors = getDivisors(durationMonths)
-    return divisors.map(months => ({
-      value: months,
-      label: months === 1 ? "Monthly (1 month)" :
-             months === 3 ? "Quarterly (3 months)" :
-             months === 6 ? "Semiannual (6 months)" :
-             months === 12 ? "Annual (12 months)" :
-             `Every ${months} months`
-    }))
   }
 
   const getFundingPeriodDays = (): number => {
@@ -123,69 +123,179 @@ export default function CorpoPage() {
   const [currency] = useState<Currency>("USDC")
   const [startDate, setStartDate] = useState(getDefaultStartDate())
   const [endDate, setEndDate] = useState(getDefaultEndDate())
-  const [durationMonths, setDurationMonths] = useState(12)
+  const [durationYears, setDurationYears] = useState(1)
   const [lastModified, setLastModified] = useState<'start' | 'end' | 'duration'>('duration')
   const [totalRepayment, setTotalRepayment] = useState("")
-  const [couponRate, setCouponRate] = useState("")
+  const [couponRate, setCouponRate] = useState("5.5")
   const [couponFrequencyMonths, setCouponFrequencyMonths] = useState(12)
-  const [bondSymbol, setBondSymbol] = useState("")
+
+  // Calculate total repayment for classic bonds
+  const calculateTotalRepayment = (): number => {
+    if (format !== "CLASSIC") return 0
+    
+    const principal = Number.parseFloat(principalTarget) || 0
+    const rate = Number.parseFloat(couponRate) || 0
+    
+    if (principal === 0 || rate === 0) return principal
+    
+    // Calculate number of coupon payments (duration in years * 12 months / frequency)
+    const durationMonths = durationYears * 12
+    const numberOfPayments = Math.floor(durationMonths / couponFrequencyMonths)
+    
+    // Calculate total coupon payments
+    const couponAmount = (principal * rate / 100) * (couponFrequencyMonths / 12)
+    const totalCoupons = couponAmount * numberOfPayments
+    
+    // Total repayment = principal + all coupons
+    return principal + totalCoupons
+  }
+
+  const getCalculatedTotalRepayment = (): string => {
+    if (format === "CLASSIC") {
+      return calculateTotalRepayment().toFixed(2)
+    }
+    return totalRepayment
+  }
+  const [bondSymbol] = useState(() => generateBondCode())
   const [minTicket, setMinTicket] = useState("")
   const [hardCap, setHardCap] = useState("")
   const [kycRequired, setKycRequired] = useState(false)
-  const [termsUrl, setTermsUrl] = useState("")
   const [disclosureAccepted, setDisclosureAccepted] = useState(false)
 
   // Update the third parameter when two are modified
   const handleStartDateChange = (newStart: string) => {
-    setStartDate(newStart)
+    // Check if date is not in the past (PST timezone)
+    const todayPST = getTodayPST()
+    const selectedDate = new Date(newStart)
+    selectedDate.setHours(0, 0, 0, 0)
+    
+    if (selectedDate < todayPST) {
+      // If date is in the past, show warning and use today
+      toast({
+        title: "Invalid date",
+        description: "Start date cannot be in the past (PST timezone). Using today's date instead.",
+        variant: "destructive",
+      })
+      newStart = todayPST.toISOString().split('T')[0]
+    }
+    
+    // Normalize to ensure day is between 1-28
+    const normalizedStart = normalizeDateToValidDay(newStart)
+    const newStartDay = new Date(normalizedStart).getDate()
+    setStartDate(normalizedStart)
     setLastModified('start')
     
-    if (lastModified === 'end' || lastModified === 'start') {
-      // Calculate duration from start and end
-      const months = getMonthsDifference(newStart, endDate)
-      setDurationMonths(months)
-      updateCouponFrequency(months)
-    } else {
-      // Calculate end from start and duration
-      const newEnd = addMonths(newStart, durationMonths)
-      setEndDate(newEnd)
-    }
+    // Always align the end date's day with the start date's day
+    const currentEnd = new Date(endDate)
+    const lastDayOfEndMonth = new Date(currentEnd.getFullYear(), currentEnd.getMonth() + 1, 0).getDate()
+    currentEnd.setDate(Math.min(newStartDay, lastDayOfEndMonth, 28))
+    const alignedEnd = currentEnd.toISOString().split('T')[0]
+    setEndDate(alignedEnd)
+    
+    // Recalculate duration in years with the new aligned dates
+    const months = getMonthsDifference(normalizedStart, alignedEnd)
+    const years = Math.round(months / 12)
+    setDurationYears(Math.max(1, years))
   }
 
   const handleEndDateChange = (newEnd: string) => {
-    setEndDate(newEnd)
+    // Check if date is not in the past (PST timezone)
+    const todayInPST = getTodayPST()
+    const selectedDate = new Date(newEnd)
+    selectedDate.setHours(0, 0, 0, 0)
+    
+    if (selectedDate < todayInPST) {
+      // If date is in the past, show warning and use today
+      toast({
+        title: "Invalid date",
+        description: "End date cannot be in the past (PST timezone). Using today's date instead.",
+        variant: "destructive",
+      })
+      newEnd = todayInPST.toISOString().split('T')[0]
+    }
+    
+    // Normalize to ensure day is between 1-28
+    const normalizedEnd = normalizeDateToValidDay(newEnd)
+    const newEndDay = new Date(normalizedEnd).getDate()
+    setEndDate(normalizedEnd)
     setLastModified('end')
     
-    if (lastModified === 'start' || lastModified === 'end') {
-      // Calculate duration from start and end
-      const months = getMonthsDifference(startDate, newEnd)
-      setDurationMonths(months)
-      updateCouponFrequency(months)
-    } else {
-      // Calculate start from end and duration
-      const newStart = addMonths(newEnd, -durationMonths)
-      setStartDate(newStart)
+    // Align the start date's day with the end date's day
+    const currentStart = new Date(startDate)
+    const lastDayOfStartMonth = new Date(currentStart.getFullYear(), currentStart.getMonth() + 1, 0).getDate()
+    currentStart.setDate(Math.min(newEndDay, lastDayOfStartMonth, 28))
+    let alignedStart = currentStart.toISOString().split('T')[0]
+    
+    // Ensure start date is not in the past (PST timezone)
+    const todayForValidation = getTodayPST()
+    const alignedStartDate = new Date(alignedStart)
+    alignedStartDate.setHours(0, 0, 0, 0)
+    if (alignedStartDate < todayForValidation) {
+      // If aligned start is in the past, use today instead
+      alignedStart = todayForValidation.toISOString().split('T')[0]
+      toast({
+        title: "Start date adjusted",
+        description: "Start date cannot be in the past (PST timezone). It has been set to today.",
+        variant: "default",
+      })
     }
+    
+    setStartDate(alignedStart)
+    
+    // Recalculate duration in years with the new aligned dates
+    const months = getMonthsDifference(alignedStart, normalizedEnd)
+    const years = Math.round(months / 12)
+    setDurationYears(Math.max(1, years))
   }
 
-  const handleDurationChange = (newDuration: number) => {
-    if (newDuration < 1) return
-    setDurationMonths(newDuration)
+  const handleDurationChange = (newYears: number) => {
+    if (newYears < 1) return
+    setDurationYears(newYears)
     setLastModified('duration')
-    updateCouponFrequency(newDuration)
     
     // When duration changes, always adjust the end date (keep start fixed)
-    const newEnd = addMonths(startDate, newDuration)
+    const monthsToAdd = newYears * 12
+    const newEnd = addMonths(startDate, monthsToAdd)
     setEndDate(newEnd)
   }
 
-  const updateCouponFrequency = (months: number) => {
-    const available = getAvailableFrequencies(months)
-    const isCurrentValid = available.some(f => f.value === couponFrequencyMonths)
-    if (available.length > 0 && !isCurrentValid) {
-      setCouponFrequencyMonths(available[0].value)
-    }
+  // Get current date in PST timezone
+  const getTodayPST = (): Date => {
+    const now = new Date()
+    // Convert to PST (UTC-8) - PST is always UTC-8 (not PDT which is UTC-7)
+    const pstOffset = -8 * 60 // PST is UTC-8
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000)
+    const pstTime = new Date(utcTime + (pstOffset * 60000))
+    pstTime.setHours(0, 0, 0, 0)
+    return pstTime
   }
+
+  // Auto-correct start date if it's in the past (based on PST timezone)
+  useEffect(() => {
+    const todayPST = getTodayPST()
+    const start = new Date(startDate)
+    start.setHours(0, 0, 0, 0)
+    
+    if (start < todayPST) {
+      // Start date is in the past, correct it to today (PST)
+      const correctedStart = todayPST.toISOString().split('T')[0]
+      const startDay = todayPST.getDate()
+      
+      // Adjust end date to match the same day of month
+      const currentEnd = new Date(endDate)
+      const lastDayOfEndMonth = new Date(currentEnd.getFullYear(), currentEnd.getMonth() + 1, 0).getDate()
+      currentEnd.setDate(Math.min(startDay, lastDayOfEndMonth, 28))
+      const correctedEnd = currentEnd.toISOString().split('T')[0]
+      
+      setStartDate(correctedStart)
+      setEndDate(correctedEnd)
+      
+      // Recalculate duration in years
+      const months = getMonthsDifference(correctedStart, correctedEnd)
+      const years = Math.round(months / 12)
+      setDurationYears(Math.max(1, years))
+    }
+  }, [startDate, endDate, durationYears])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,7 +311,7 @@ export default function CorpoPage() {
     }
 
     const principal = Number.parseFloat(principalTarget)
-    const repayment = Number.parseFloat(totalRepayment)
+    const repayment = format === "CLASSIC" ? calculateTotalRepayment() : Number.parseFloat(totalRepayment)
     const endDateISO = `${endDate}T00:00:00.000Z`
 
     if (isNaN(principal) || principal <= 0) {
@@ -213,22 +323,33 @@ export default function CorpoPage() {
       return
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    if (format === "CLASSIC") {
+      const rate = Number.parseFloat(couponRate)
+      if (isNaN(rate) || rate <= 0) {
+        toast({
+          title: "Invalid coupon rate",
+          description: "Please enter a valid coupon rate",
+          variant: "destructive",
+        })
+        return
+      }
+    }
 
-    if (new Date(startDate) < today) {
+    const todayPST = getTodayPST()
+
+    if (new Date(startDate) < todayPST) {
       toast({
         title: "Invalid start date",
-        description: "Start date cannot be in the past",
+        description: "Start date cannot be in the past (PST timezone)",
         variant: "destructive",
       })
       return
     }
 
-    if (new Date(endDate) <= today) {
+    if (new Date(endDate) <= todayPST) {
       toast({
         title: "Invalid end date",
-        description: "Bond end date must be in the future",
+        description: "Bond end date must be in the future (PST timezone)",
         variant: "destructive",
       })
       return
@@ -243,10 +364,10 @@ export default function CorpoPage() {
       return
     }
 
-    if (durationMonths < 1) {
+    if (durationYears < 1) {
       toast({
         title: "Invalid duration",
-        description: "Bond duration must be at least 1 month",
+        description: "Bond duration must be at least 1 year",
         variant: "destructive",
       })
       return
@@ -261,14 +382,17 @@ export default function CorpoPage() {
       return
     }
 
-    const minTicketNum = Number.parseFloat(minTicket)
-    if (isNaN(minTicketNum) || minTicketNum <= 0) {
-      toast({
-        title: "Invalid minimum ticket",
-        description: "Please enter a valid minimum investment amount",
-        variant: "destructive",
-      })
-      return
+    // Validate minimum ticket only if provided
+    if (minTicket.trim() !== "") {
+      const minTicketNum = Number.parseFloat(minTicket)
+      if (isNaN(minTicketNum) || minTicketNum <= 0) {
+        toast({
+          title: "Invalid minimum ticket",
+          description: "Please enter a valid minimum investment amount",
+          variant: "destructive",
+        })
+        return
+      }
     }
 
     setIsSubmitting(true)
@@ -298,16 +422,14 @@ export default function CorpoPage() {
     setFormat("CLASSIC")
     setStartDate(getDefaultStartDate())
     setEndDate(getDefaultEndDate())
-    setDurationMonths(12)
+    setDurationYears(1)
     setLastModified('duration')
     setTotalRepayment("")
-    setCouponRate("")
+    setCouponRate("5.5")
     setCouponFrequencyMonths(12)
-    setBondSymbol("")
     setMinTicket("")
     setHardCap("")
     setKycRequired(false)
-    setTermsUrl("")
     setDisclosureAccepted(false)
     setShowSuccess(false)
   }
@@ -425,11 +547,12 @@ export default function CorpoPage() {
                               <TooltipContent>
                                 <p className="max-w-xs text-sm">
                                   Fill in any 2 of the 3 fields. The third will be calculated automatically.
-                                  Duration must be in whole months.
+                                  Duration must be in whole months. Days must be between 1 and 28 to ensure consistency across all months.
                                 </p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
+                          <span className="text-xs text-muted-foreground ml-auto">(PST timezone - midnight)</span>
                         </div>
 
                         <div className="grid md:grid-cols-3 gap-4">
@@ -460,11 +583,11 @@ export default function CorpoPage() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="duration">Duration (months) *</Label>
+                            <Label htmlFor="duration">Duration (years) *</Label>
                             <Input
                               id="duration"
                               type="number"
-                              value={durationMonths}
+                              value={durationYears}
                               onChange={(e) => handleDurationChange(Number.parseInt(e.target.value) || 1)}
                               min="1"
                               step="1"
@@ -482,39 +605,44 @@ export default function CorpoPage() {
                             <strong>Bond Period:</strong> {new Date(startDate).toLocaleDateString('fr-FR')} → {new Date(endDate).toLocaleDateString('fr-FR')}
                           </p>
                           <p className="mt-1">
-                            <strong>Duration:</strong> {durationMonths} months ({Math.floor(durationMonths / 12)} year{Math.floor(durationMonths / 12) !== 1 ? 's' : ''}{durationMonths % 12 > 0 ? ` and ${durationMonths % 12} month${durationMonths % 12 !== 1 ? 's' : ''}` : ''})
+                            <strong>Duration:</strong> {durationYears} year{durationYears !== 1 ? 's' : ''}
+                          </p>
+                          <p className="mt-1 text-blue-600 dark:text-blue-400">
+                            Payments on day {new Date(startDate).getDate()} of each period
                           </p>
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor="total-repayment">Total Repayment at Maturity *</Label>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="max-w-xs text-sm">
-                                  Must be at least the discounted principal target using a 5% annual discount rate. This
-                                  ensures the bond offers a reasonable return.
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                      {format === "ZERO_COUPON" && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="total-repayment">Total Repayment at Maturity *</Label>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="max-w-xs text-sm">
+                                    Must be at least the discounted principal target using a 5% annual discount rate. This
+                                    ensures the bond offers a reasonable return.
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          <Input
+                            id="total-repayment"
+                            type="number"
+                            placeholder="1180000"
+                            value={totalRepayment}
+                            onChange={(e) => setTotalRepayment(e.target.value)}
+                            min="0"
+                            step="0.01"
+                            required
+                          />
                         </div>
-                        <Input
-                          id="total-repayment"
-                          type="number"
-                          placeholder="1180000"
-                          value={totalRepayment}
-                          onChange={(e) => setTotalRepayment(e.target.value)}
-                          min="0"
-                          step="0.01"
-                          required
-                        />
-                      </div>
+                      )}
 
                       {format === "CLASSIC" && (
                         <>
@@ -558,18 +686,50 @@ export default function CorpoPage() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {getAvailableFrequencies(durationMonths).map((freq) => (
-                                    <SelectItem key={freq.value} value={freq.value.toString()}>
-                                      {freq.label}
-                                    </SelectItem>
-                                  ))}
+                                  <SelectItem value="1">Monthly</SelectItem>
+                                  <SelectItem value="3">Quarterly</SelectItem>
+                                  <SelectItem value="6">Semi-Annual</SelectItem>
+                                  <SelectItem value="12">Annual</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {getAvailableFrequencies(durationMonths).length === 0 && (
-                                <p className="text-xs text-amber-600">
-                                  ⚠️ Duration too short for coupon payments. Consider using zero-coupon format.
-                                </p>
-                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-muted-foreground bg-muted p-4 rounded-md space-y-2">
+                            <p className="font-semibold text-sm text-foreground mb-3">Bond Payment Calculation</p>
+                            <div className="grid gap-2">
+                              <div className="flex justify-between">
+                                <span>Principal (Initial Liquidity):</span>
+                                <span className="font-medium">{Number.parseFloat(principalTarget || "0").toFixed(2)} USDC</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Coupon Rate:</span>
+                                <span className="font-medium">{couponRate}% per year</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Number of Payments:</span>
+                                <span className="font-medium">{Math.floor((durationYears * 12) / couponFrequencyMonths)} payments ({couponFrequencyMonths === 1 ? 'Monthly' : couponFrequencyMonths === 3 ? 'Quarterly' : couponFrequencyMonths === 6 ? 'Semi-Annual' : 'Annual'})</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Coupon per Payment:</span>
+                                <span className="font-medium">
+                                  {((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)).toFixed(2)} USDC
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Total Coupons:</span>
+                                <span className="font-medium">
+                                  {(((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)) * Math.floor((durationYears * 12) / couponFrequencyMonths)).toFixed(2)} USDC
+                                </span>
+                              </div>
+                              <div className="h-px bg-border my-2"></div>
+                              <div className="flex justify-between text-base">
+                                <span className="font-semibold text-foreground">Total Repayment at Maturity:</span>
+                                <span className="font-bold text-primary">{calculateTotalRepayment().toFixed(2)} USDC</span>
+                              </div>
+                              <p className="text-xs italic mt-2">
+                                = Principal ({Number.parseFloat(principalTarget || "0").toFixed(2)}) + All Coupons ({(((Number.parseFloat(principalTarget || "0") * Number.parseFloat(couponRate || "0") / 100) * (couponFrequencyMonths / 12)) * Math.floor((durationYears * 12) / couponFrequencyMonths)).toFixed(2)})
+                              </p>
                             </div>
                           </div>
                         </>
@@ -581,28 +741,29 @@ export default function CorpoPage() {
                       <h3 className="font-semibold text-lg">Bond Details</h3>
 
                       <div className="space-y-2">
-                        <Label htmlFor="bond-symbol">Bond Symbol/Code *</Label>
+                        <Label htmlFor="bond-symbol">Bond Code (Auto-generated)</Label>
                         <Input
                           id="bond-symbol"
-                          placeholder="BOND-COMPANY-2027"
                           value={bondSymbol}
-                          onChange={(e) => setBondSymbol(e.target.value)}
-                          required
+                          readOnly
+                          className="bg-muted cursor-not-allowed"
                         />
+                        <p className="text-xs text-muted-foreground">
+                          This unique code is automatically generated and cannot be modified
+                        </p>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="min-ticket">Minimum Ticket *</Label>
+                          <Label htmlFor="min-ticket">Minimum Ticket (Optional)</Label>
                           <Input
                             id="min-ticket"
                             type="number"
-                            placeholder="1000"
+                            placeholder="Leave empty for no minimum"
                             value={minTicket}
                             onChange={(e) => setMinTicket(e.target.value)}
                             min="0"
                             step="0.01"
-                            required
                           />
                         </div>
 
@@ -618,17 +779,6 @@ export default function CorpoPage() {
                             step="0.01"
                           />
                         </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="terms-url">Terms & Conditions URL (Optional)</Label>
-                        <Input
-                          id="terms-url"
-                          type="url"
-                          placeholder="https://company.com/bond-terms"
-                          value={termsUrl}
-                          onChange={(e) => setTermsUrl(e.target.value)}
-                        />
                       </div>
                     </div>
 

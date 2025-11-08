@@ -18,9 +18,11 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
-            <span className="text-sm font-bold">XCB</span>
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="XRPL Corporate Bonds" 
+            className="h-8 w-8"
+          />
           <span className="hidden sm:inline">XRPL Corporate Bonds</span>
         </Link>
 

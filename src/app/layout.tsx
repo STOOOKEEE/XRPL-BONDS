@@ -16,19 +16,17 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/icon-light-32x32.png",
-        media: "(prefers-color-scheme: light)",
+        url: "/logo.png",
+        sizes: "32x32",
+        type: "image/png",
       },
       {
-        url: "/icon-dark-32x32.png",
-        media: "(prefers-color-scheme: dark)",
-      },
-      {
-        url: "/icon.svg",
-        type: "image/svg+xml",
+        url: "/favicon.ico",
+        sizes: "any",
       },
     ],
-    apple: "/apple-icon.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
   },
 }
 
@@ -39,6 +37,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" type="image/png" href="/logo.png?v=2" />
+        <link rel="shortcut icon" href="/logo.png?v=2" />
+        <link rel="apple-touch-icon" href="/logo.png?v=2" />
+      </head>
       <body className={`font-sans antialiased`} suppressHydrationWarning>
         <WalletProvider>
           <QueryProvider>{children}</QueryProvider>

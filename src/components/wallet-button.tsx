@@ -139,12 +139,16 @@ export function WalletButton() {
           // Vérifier si Crossmark est installé
           const crossmarkApi = (window as any).crossmark || (window as any).crossmarkSdk;
           
-          if (!crossmarkApi) {
-            throw new Error('Crossmark n\'est pas installé. Installez l\'extension depuis https://crossmark.io/');
+          if (!crossmarkApi || typeof crossmarkApi !== 'object' || Object.keys(crossmarkApi).length === 0) {
+            throw new Error(
+              'Crossmark n\'est pas installé ou n\'est pas chargé. ' +
+              'Installez l\'extension depuis https://crossmark.io/ et rafraîchissez la page.'
+            );
           }
 
           console.log('✅ Crossmark détecté');
           console.log('📋 Méthodes disponibles:', Object.keys(crossmarkApi));
+          console.log('📋 Objet complet:', crossmarkApi);
 
           // Connexion avec Crossmark - essayer différentes méthodes
           try {

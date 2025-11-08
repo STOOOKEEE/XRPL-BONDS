@@ -43,7 +43,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect, projectId }: Wa
             name: 'XRPL Corporate Bonds',
             description: 'Invest in tokenized corporate bonds on XRPL',
             url: window.location.origin,
-            icons: [`${window.location.origin}/icon.svg`],
+            icons: [`${window.location.origin}/logo.png`],
           },
         })
 
